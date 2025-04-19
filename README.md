@@ -5,7 +5,7 @@
     </h1>
     <h2>An Adaptive Exploration Strategy for Zero-Shot Object Navigation with Target-centric Semantic Fusion</h2>
     <strong>
-      <!-- RAL -->
+      The paper is under review.
     </strong>
     <br>
         <a href="https://robotics-star.com/people" target="_blank">Mingjie Zhang</a><sup>1</sup>,
