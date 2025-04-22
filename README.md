@@ -24,7 +24,7 @@
         </h45>
         <sup>†</sup>Corresponding Authors
     </p>
-    <a href=""><img alt="Paper" src="https://img.shields.io/badge/Paper-arXiv-red"/></a>
+    <a href="https://arxiv.org/abs/2504.14478"><img alt="Paper" src="https://img.shields.io/badge/Paper-arXiv-red"/></a>
     <a href='https://sysu-star.github.io/ApexNav'><img src='https://img.shields.io/badge/Project_Page-ApexNav-green' alt='Project Page'></a>
 
 <br>
