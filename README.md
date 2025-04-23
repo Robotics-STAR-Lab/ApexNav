@@ -9,10 +9,10 @@
     </strong>
     <br>
         <a href="https://robotics-star.com/people" target="_blank">Mingjie Zhang</a><sup>1</sup>,
-        <a href="" target="_blank">Yuheng Du</a><sup>1</sup>,
+        Yuheng Du</a><sup>1</sup>,
         <a href="https://robotics-star.com/people" target="_blank">Chengkai Wu</a><sup>1</sup>,
         <a href="https://facultyprofiles.hkust-gz.edu.cn/faculty-personal-page/ZHOU-Jinni/eejinni" target="_blank">Jinni Zhou</a><sup>1</sup>,
-        <a href="" target="_blank">Zhenchao Qi</a><sup>1</sup>,
+        Zhenchao Qi</a><sup>1</sup>,
         <a href="https://personal.hkust-gz.edu.cn/junma/people-page.html" target="_blank">Jun Ma</a><sup>1</sup>,
         <a href="https://robotics-star.com/people" target="_blank">Boyu Zhou</a><sup>2,†</sup>
         <p>
@@ -36,7 +36,7 @@ Code will be released upon paper acceptance.
 
 
 <p align="center">
-  <img src="assets/imgs/pipeline.jpg" width = 70%/>
+  <img src="assets/imgs/pipeline.jpg" width = 75%/>
 </p>
 
 <p align="center">
