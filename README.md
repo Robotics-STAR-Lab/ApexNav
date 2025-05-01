@@ -43,9 +43,7 @@ Code will be released upon paper acceptance.
 Please see the [project page](https://robotics-star.com/ApexNav) for more real-world experimental results.
 
 <div align="center">
-  <video width="90%" controls muted>
-    <source src="assets/videos/Toilet.mp4" type="video/mp4">
-  </video>
+  <img src="assets/videos/Toilet.gif" width = 90%/>
 </div>
 
 
