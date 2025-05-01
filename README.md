@@ -25,20 +25,33 @@
         <sup>†</sup>Corresponding Authors
     </p>
     <a href="https://arxiv.org/abs/2504.14478"><img alt="Paper" src="https://img.shields.io/badge/Paper-arXiv-red"/></a>
-    <a href='https://sysu-star.github.io/ApexNav'><img src='https://img.shields.io/badge/Project_Page-ApexNav-green' alt='Project Page'></a>
+    <a href='https://robotics-star.com/ApexNav'><img src='https://img.shields.io/badge/Project_Page-ApexNav-green' alt='Project Page'></a>
 
 <br>
+
+</div>
+
+## System Overview
 
 Code will be released upon paper acceptance.
+<p align="center">
+  <img src="assets/imgs/pipeline.jpg" width = 90%/>
+</p>
 
-<br>
+## Real-world Deployment
+
+Please see the [project page](https://robotics-star.com/ApexNav) for more real-world experimental results.
+
+<div align="center">
+  <video width="90%" controls muted>
+    <source src="assets/videos/Toilet.mp4" type="video/mp4">
+  </video>
 </div>
 
 
-<p align="center">
-  <img src="assets/imgs/pipeline.jpg" width = 75%/>
-</p>
+## Benchmark Comparisons
 
 <p align="center">
-  <img src="assets/imgs/apexnav_benchmark.jpg" width = 60%/>
+  <img src="assets/imgs/apexnav_benchmark.jpg" width = 90%/>
 </p>
+
