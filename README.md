@@ -43,13 +43,24 @@ Code will be released upon paper acceptance.
 Please see the [project page](https://robotics-star.com/ApexNav) for more real-world experimental results.
 
 <div align="center">
-  <img src="assets/videos/Toilet.gif" width = 90%/>
+  <img src="assets/videos/Toilet.gif" width = 80%/>
 </div>
 
 
 ## Benchmark Comparisons
 
 <p align="center">
-  <img src="assets/imgs/apexnav_benchmark.jpg" width = 90%/>
+  <img src="assets/imgs/apexnav_benchmark.jpg" width = 80%/>
 </p>
+
+## Citation 📜
+
+```bibtex
+@article{zhang2025apexnav,
+  title={ApexNav: An Adaptive Exploration Strategy for Zero-Shot Object Navigation with Target-centric Semantic Fusion},
+  author={Zhang, Mingjie and Du, Yuheng and Wu, Chengkai and Zhou, Jinni and Qi, Zhenchao and Ma, Jun and Zhou, Boyu},
+  journal={arXiv preprint arXiv:2504.14478},
+  year={2025}
+}
+```
 
