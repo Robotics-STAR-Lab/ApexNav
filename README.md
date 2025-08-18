@@ -5,7 +5,7 @@
     </h1>
     <h2>An Adaptive Exploration Strategy for Zero-Shot Object Navigation with Target-centric Semantic Fusion</h2>
     <strong>
-      The paper is under review.
+      IEEE Robotics and Automation Letters
     </strong>
     <br>
         <a href="https://zager-zhang.github.io" target="_blank">Mingjie Zhang</a><sup>1</sup>,
@@ -33,7 +33,7 @@
 
 ## System Overview
 
-Code will be released upon paper acceptance.
+Code will be released soon.
 <p align="center">
   <img src="assets/imgs/pipeline.jpg" width = 90%/>
 </p>
