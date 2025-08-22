@@ -1,0 +1,88 @@
+<launch>
+    <arg name="map_size_x_"/>
+    <arg name="map_size_y_"/>
+
+    <arg name="odometry_topic_"/>
+    <arg name="sensor_pose_topic_"/>
+    <arg name="depth_topic_"/>
+
+    <arg name="cx_"/>
+    <arg name="cy_"/>
+    <arg name="fx_"/>
+    <arg name="fy_"/>
+
+    <!-- main node -->
+    <node pkg="exploration_manager" name="exploration_node" type="exploration_node" output="screen">
+        <remap from ="/odom_world"    to = "$(arg odometry_topic_)"/>
+        <remap from ="/map_ros/pose"  to = "$(arg sensor_pose_topic_)"/>
+        <remap from ="/map_ros/depth" to = "$(arg depth_topic_)"/>
+
+        <!-- Mapping -->
+        <!-- ray_mode = 0: penetrate ; ray_mode = 1: non-penetrate -->
+        <param name="sdf_map/ray_mode" value="0" />
+        <param name="sdf_map/resolution" value="0.05" />
+        <param name="sdf_map/map_size_x" value="$(arg map_size_x_)" />
+        <param name="sdf_map/map_size_y" value="$(arg map_size_y_)" />
+        <param name="sdf_map/obstacles_inflation" value="0.18" />
+        <param name="sdf_map/local_bound" value="5.0"/>
+
+        <param name="sdf_map/p_hit" value="0.90"/>
+        <param name="sdf_map/p_miss" value="0.48"/>
+        <param name="sdf_map/p_min" value="0.10"/>
+        <param name="sdf_map/p_max" value="0.98"/>
+        <param name="sdf_map/p_occ" value="0.80"/>
+        <param name="sdf_map/max_ray_length" value="4.99"/>
+        <param name="sdf_map/optimistic" value="false" type="bool"/>
+        <param name="sdf_map/signed_dist" value="false" type="bool"/>
+
+        <param name="map_ros/cx" value="$(arg cx_)"/>
+        <param name="map_ros/cy" value="$(arg cy_)"/>
+        <param name="map_ros/fx" value="$(arg fx_)"/>
+        <param name="map_ros/fy" value="$(arg fy_)"/>
+        <param name="map_ros/depth_filter_maxdist" value="4.99"/>
+        <param name="map_ros/depth_filter_mindist" value="0.0"/>
+        <param name="map_ros/depth_filter_margin" value="2"/>
+        <param name="map_ros/filter_min_height" value="0.28"/>
+        <param name="map_ros/filter_max_height" value="1.18"/>
+        <param name="map_ros/k_depth_scaling_factor" value="65535.0"/>
+        <param name="map_ros/skip_pixel" value="1"/>
+        <param name="map_ros/frame_id" value="world"/>
+        <param name="map_ros/virtual_ground_height" value="-0.34"/>
+
+        <param name="fsm/is_real_world" value="false" type="bool"/>
+
+        <!-- Exploration manager -->
+        <!-- 0: distance 1: semantic 2: hybrid(TSP sem + closest dist) 3: TSP(distance) -->
+        <param name="exploration/policy" value="2" type="int"/>
+        <param name="exploration/sigma_threshold" value="0.015" type="double"/>
+        <param name="exploration/max_to_mean_threshold" value="1.10" type="double"/>
+        <param name="exploration/max_to_mean_percentage" value="0.90" type="double"/>
+        <param name="exploration/tsp_dir" value="$(find lkh_mtsp_solver)/resource" type="string"/>
+
+        <param name="frontier/cluster_min" value="2" type="int"/>
+        <param name="frontier/cluster_size_xy" value="0.65" type="double"/>
+        <param name="frontier/min_view_finish_fraction" value="0.2" type="double"/>
+        <param name="frontier/min_contain_unknown" value="30" type="int"/>
+
+        <param name="object/min_observation_num" value="2" type="int"/>
+        <!-- 0: no_fusion 1: ours_fusion 2: max_fusion-->
+        <param name="object/fusion_type" value="1" type="int"/>
+        <param name="object/use_observation" value="true" type="bool"/>
+        <param name="object/vis_cloud" value="true" type="bool"/>
+
+        <!-- Perception utils -->
+        <param name="perception_utils/left_angle" value="$(eval 30 * 3.1415926 / 180.0)" type="double"/>
+        <param name="perception_utils/right_angle" value="$(eval 30 * 3.1415926 / 180.0)" type="double"/>
+        <param name="perception_utils/max_dist" value="4.0" type="double"/>
+        <param name="perception_utils/vis_dist" value="1.0" type="double"/>
+
+        <!-- path searching -->
+        <param name="astar/lambda_heu" value="1.0" type="double"/>
+        <param name="astar/resolution_astar" value="0.1" type="double"/>
+    </node>
+
+    <!-- ATSP solver -->
+    <node pkg="lkh_mtsp_solver" name="tsp_solver" type="tsp_node" output="log">
+        <param name="exploration/tsp_dir" value="$(find lkh_mtsp_solver)/resource" type="string"/>
+    </node>
+</launch>

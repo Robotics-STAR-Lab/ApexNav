@@ -1,0 +1,34 @@
+<launch>
+  <!-- size of map, change the size in x, y according to your application -->
+  <arg name="map_size_x" value="80.0"/>
+  <arg name="map_size_y" value="80.0"/>
+
+  <arg name="is_sim" value="true"/>
+
+  <!-- topic of your odometry such as VIO or LIO -->
+  <arg name="odom_topic" value="/habitat/odom" />
+  <!-- transform of camera frame in the world frame -->
+  <arg name="sensor_pose_topic" value="/habitat/sensor_pose"/>
+  <!-- depth image, 640x480 by default -->
+  <arg name="depth_topic" value="/habitat/camera_depth"/>
+
+  <group if="$(arg is_sim)">
+    <rosparam file="$(find exploration_manager)/../../../config/habitat_eval_hm3dv2.yaml" command="load" />
+  </group>
+
+  <!-- main algorithm params -->
+  <include file="$(find exploration_manager)/launch/algorithm.xml">
+    <arg name="map_size_x_" value="$(arg map_size_x)"/>
+    <arg name="map_size_y_" value="$(arg map_size_y)"/>
+
+    <arg name="odometry_topic_" value="$(arg odom_topic)"/>
+    <arg name="sensor_pose_topic_" value="$(arg sensor_pose_topic)"/>
+    <arg name="depth_topic_" value="$(arg depth_topic)"/>
+
+    <!-- intrinsic params of the depth camera -->
+    <arg name="cx_" value="320"/>
+    <arg name="cy_" value="240"/>
+    <arg name="fx_" value="388.1910413097385"/>
+    <arg name="fy_" value="422.0475153598262"/>
+  </include>
+</launch>
