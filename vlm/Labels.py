@@ -1,0 +1,25 @@
+MP3D_ID_TO_NAME = [
+    "chair",
+    "table | dining table | coffee table | desk",  # "table",
+    "picture | framed photograph",  # "picture",
+    "cabinet",
+    "pillow",  # "pillow",
+    "couch",  # "sofa",
+    "bed",
+    "nightstand",  # "chest of drawers",
+    "potted plant",  # "plant",
+    "sink",
+    "toilet",
+    "stool",
+    "towel",
+    "tv",  # "tv monitor",
+    "shower",
+    "bathtub",
+    "counter",
+    "fireplace",
+    "gym equipment",
+    "seating",
+    "clothes",
+]
+
+HM3D_ID_TO_NAME = ["chair", "bed", "potted plant", "toilet", "tv", "couch"]
