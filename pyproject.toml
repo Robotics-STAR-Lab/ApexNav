@@ -3,12 +3,12 @@ requires = ["setuptools>=64"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "ObjectNav"
+name = "ApexNav"
 version = "0.1"
 authors = [
-    {name = "Zager ZHANG", email = "zagerzhang@gmail.com"},
+    {name = "Zager-Zhang"},
 ]
-description = "ObjectNav"
+description = "ApexNav"
 readme = "README.md"
 requires-python = ">=3.9"
 dependencies = [
