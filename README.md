@@ -61,7 +61,7 @@ The pipeline of ApexNav is detailed in the overview below.
 </p>
 
 ## 🛠️ Installation
-> Tested on Ubuntu 20.04 with ROS1 Noetic and Python 3.9
+> Tested on Ubuntu 20.04 with ROS Noetic and Python 3.9
 
 ### 1. Prerequisites
 
@@ -72,6 +72,7 @@ sudo apt-get install libarmadillo-dev libompl-dev
 ```
 
 #### 1.2 FTXUI
+A simple cross-platform C++ library for terminal based user interfaces.
 ``` bash
 git clone https://github.com/ArthurSonzogni/FTXUI
 cd FTXUI
@@ -81,7 +82,10 @@ make -j
 sudo make install
 ```
 
-#### 1.3 Ollama (Optional)
+#### 1.3 LLM (Optional)
+> You can skip LLM configuration and directly use our pre-generated LLM output results in `llm/answers`
+
+ollama 
 ``` bash
 curl -fsSL https://ollama.com/install.sh | sh
 ollama pull qwen3:8b
@@ -123,7 +127,7 @@ conda activate apexnav
 
 #### 2.3 Pytorch
 ``` bash
-# You need to choose the right version based on your CUDA version
+# You can use 'nvcc --version' to check your CUDA version.
 # CUDA 11.8
 pip install torch==2.5.0 torchvision==0.20.0 torchaudio==2.5.0 --index-url https://download.pytorch.org/whl/cu118
 # CUDA 12.1
@@ -144,21 +148,50 @@ pip install -e habitat-lab
 pip install -e habitat-baselines
 ```
 
+**Note:** Any numpy-related errors will not affect subsequent operations, as long as `numpy==1.23.5` and `numba==0.60.0` are correctly installed.
+
 #### 2.5 Others
 ``` bash
+pip install salesforce-lavis==1.0.2 # -i https://pypi.tuna.tsinghua.edu.cn/simple
 cd .. # Return to ApexNav directory
-pip install -i https://pypi.tuna.tsinghua.edu.cn/simple salesforce-lavis==1.0.2
 pip install -e .
 ```
 
-**Note:** If numpy version conflicts occur, reinstall with the correct version:
-``` bash
-pip uninstall numpy
-pip install numpy==1.23.5
+**Note:** Any numpy-related errors will not affect subsequent operations, as long as `numpy==1.23.5` and `numba==0.60.0` are correctly installed.
+
+## 📥 Datasets Download
+
+### 🏠 Scene Datasets
+Coming soon.
+
+### 🎯 Task Datasets
+Coming soon.
+
+<!-- Your final folder `data` structure should look like this:
 ```
-
+data
+├── datasets
+│   └── objectnav
+│       ├── hm3d
+│       │   ├── v1
+│       │   │   └── val
+│       │   └── v2
+│       │       └── val
+│       └── mp3d
+│           └── v1
+│               └── val
+├── scene_datasets
+│   ├── hm3d
+│   │   └── val
+│   ├── hm3d_v0.2
+│   │   └── val
+│   └── mp3d
+├── groundingdino_swint_ogc.pth
+├── mobile_sam.pt
+├── yolov7-e6e.pt
+``` -->
 ## 🚀 Usage
-
+> All following commands should be run in the `apexnav` conda environment
 ### ROS Compilation
 ``` bash
 catkin_make -DPYTHON_EXECUTABLE=/usr/bin/python3
@@ -177,7 +210,7 @@ source ./devel/setup.bash && roslaunch exploration_manager rviz.launch # RViz vi
 source ./devel/setup.bash && roslaunch exploration_manager exploration.launch # ApexNav main algorithm
 ```
 
-### Evaluate Datasets in Habitat
+### 📊 Evaluate Datasets in Habitat
 You can evaluate on all episodes of a dataset.
 ```bash
 # Need to source the workspace
@@ -192,7 +225,7 @@ python habitat_evaluation.py --dataset mp3d
 python habitat_evaluation.py --dataset hm3dv2 test_epi_num=10 # episode_id 10
 ```
 
-### Keyboard Control in Habitat
+### 🎮 Keyboard Control in Habitat
 You can also choose to manually control the agent in the Habitat simulator:
 ```bash
 # Need to source the workspace
