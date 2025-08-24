@@ -187,6 +187,7 @@ def main(cfg: DictConfig) -> None:
 
     # Extract configuration parameters
     video_output_path = cfg.video_output_path.format(split=cfg.habitat.dataset.split)
+    need_video = cfg.need_video
     record_file_path = os.path.join(video_output_path, cfg.record_file_name)
     continue_path = os.path.join(video_output_path, cfg.continue_file_name)
     max_episode_steps = cfg.habitat.environment.max_episode_steps
@@ -205,6 +206,7 @@ def main(cfg: DictConfig) -> None:
 
     # Create directories if they don't exist
     os.makedirs(os.path.dirname(llm_answer_path), exist_ok=True)
+    os.makedirs(video_output_path, exist_ok=True)
 
     # Add top_down_map and collisions visualization
     with habitat.config.read_write(cfg):
@@ -290,7 +292,6 @@ def main(cfg: DictConfig) -> None:
         near_object = 0.0
         global_action = None
         cld_with_score_msg = MultipleMasksWithConfidence()
-        ros_state = ROS_STATE.INIT
         count_steps = 0
 
         camera_pitch = 0.0
@@ -311,11 +312,13 @@ def main(cfg: DictConfig) -> None:
         )
 
         # Initialize video frame collection
+        vis_frames = []
         info = env.get_metrics()
-        frame = observations_to_image(observations, info)
-        info.pop("top_down_map")
-        frame = overlay_frame(frame, info)
-        vis_frames = [frame]
+        if need_video:
+            frame = observations_to_image(observations, info)
+            info.pop("top_down_map")
+            frame = overlay_frame(frame, info)
+            vis_frames = [frame]
 
         # Start publishing basic information and trigger messages
         pub_timer = rospy.Timer(rospy.Duration(0.25), publish_observations)
@@ -324,6 +327,7 @@ def main(cfg: DictConfig) -> None:
 
         # Wait for ROS system to be ready
         rate = rospy.Rate(10)
+        ros_state = ROS_STATE.INIT
         while ros_state == ROS_STATE.INIT or ros_state == ROS_STATE.WAIT_TRIGGER:
             if ros_state == ROS_STATE.INIT:
                 print("Waiting for ROS to get odometry...")
@@ -353,7 +357,7 @@ def main(cfg: DictConfig) -> None:
             if global_action is not None:
                 if count_steps == max_episode_steps - 1:
                     global_action = ACTION.STOP
-                    
+
                 if global_action == ACTION.MOVE_FORWARD:
                     action = HabitatSimActions.move_forward
                 elif global_action == ACTION.TURN_LEFT:
@@ -414,10 +418,11 @@ def main(cfg: DictConfig) -> None:
 
             # Generate video frame
             info = env.get_metrics()
-            frame = observations_to_image(observations, info)
-            info.pop("top_down_map")
-            frame = overlay_frame(frame, info)
-            vis_frames.append(frame)
+            if need_video:
+                frame = observations_to_image(observations, info)
+                info.pop("top_down_map")
+                frame = overlay_frame(frame, info)
+                vis_frames.append(frame)
 
             # Track if agent has passed close to the target
             distance_to_goal = info["distance_to_goal"]
@@ -477,7 +482,10 @@ def main(cfg: DictConfig) -> None:
             img2video_output_path = "videos"
             video_name = "video_once"
 
-        images_to_video(vis_frames, img2video_output_path, video_name, fps=6, quality=9)
+        if need_video:
+            images_to_video(
+                vis_frames, img2video_output_path, video_name, fps=6, quality=9
+            )
         vis_frames.clear()
 
         # Display average performance metrics
@@ -545,6 +553,7 @@ def main(cfg: DictConfig) -> None:
 
         pbar.update()
         env.current_episode = next(env.episode_iterator)
+        rospy.sleep(0.1)  # wait a moment
 
     env.close()
     pbar.close()

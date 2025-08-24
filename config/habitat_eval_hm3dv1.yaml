@@ -58,5 +58,6 @@ llm:
 
 record_file_name: "record.txt"
 continue_file_name: "continue.txt"
+need_video: false
 video_output_path: "videos/test_hm3dv1_{split}"
 test_epi_num: -1
