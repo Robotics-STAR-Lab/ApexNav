@@ -158,6 +158,7 @@ pip install -e .
 **Note:** Any numpy-related errors will not affect subsequent operations, as long as `numpy==1.23.5` and `numba==0.60.0` are correctly installed.
 
 ## 📥 Datasets Download
+> Official Reference: https://github.com/facebookresearch/habitat-lab/blob/main/DATASETS.md
 
 ### 🏠 Scene Datasets
 Coming soon.
@@ -180,8 +181,6 @@ unzip data/datasets/objectnav/hm3d/v2.zip -d data/datasets/objectnav/hm3d && mv 
 wget -O data/datasets/objectnav/mp3d/v1.zip https://dl.fbaipublicfiles.com/habitat/data/datasets/objectnav/m3d/v1/objectnav_mp3d_v1.zip
 unzip data/datasets/objectnav/mp3d/v1.zip -d data/datasets/objectnav/mp3d/v1 && rm data/datasets/objectnav/mp3d/v1.zip
 ```
-
-**Note:** For troubleshooting, please refer to the related documentation at https://github.com/facebookresearch/habitat-lab/blob/main/DATASETS.md.
 
 <!-- Your final folder `data` structure should look like this:
 ```
