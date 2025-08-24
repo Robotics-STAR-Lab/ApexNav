@@ -182,29 +182,41 @@ wget -O data/datasets/objectnav/mp3d/v1.zip https://dl.fbaipublicfiles.com/habit
 unzip data/datasets/objectnav/mp3d/v1.zip -d data/datasets/objectnav/mp3d/v1 && rm data/datasets/objectnav/mp3d/v1.zip
 ```
 
-<!-- Your final folder `data` structure should look like this:
+Your final folder `data` structure should look like this:
 ```
 data
 ├── datasets
 │   └── objectnav
 │       ├── hm3d
 │       │   ├── v1
-│       │   │   └── val
+│       │   │   ├── train
+│       │   │   ├── val
+│       │   │   └── val_mini
 │       │   └── v2
-│       │       └── val
+│       │       ├── train
+│       │       ├── val
+│       │       └── val_mini
 │       └── mp3d
 │           └── v1
-│               └── val
+│               ├── train
+│               ├── val
+│               └── val_mini
 ├── scene_datasets
 │   ├── hm3d
 │   │   └── val
-│   ├── hm3d_v0.2
-│   │   └── val
-│   └── mp3d
+│   │       ├── 00800-TEEsavR23oF
+│   │       ├── 00801-HaxA7YrQdEC
+│   │       ├── .....
+│   ├── hm3d_v0.2 -> hm3d
+│   └── mp3d
+│       ├── 17DRP5sb8fy
+│       ├── 1LXtFkjw3qL
+│       ├── .....
 ├── groundingdino_swint_ogc.pth
 ├── mobile_sam.pt
-├── yolov7-e6e.pt
-``` -->
+└── yolov7-e6e.pt
+```
+
 ## 🚀 Usage
 > All following commands should be run in the `apexnav` conda environment
 ### ROS Compilation
