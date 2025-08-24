@@ -1,5 +1,5 @@
 <div align="center">
-    <img src="assets/apexnav_logo.png" alt="ApexNav Logo" width="200">
+    <img src="assets/apexnav_logo.jpg" alt="ApexNav Logo" width="200">
     <h2>An Adaptive Exploration Strategy for Zero-Shot Object Navigation with Target-centric Semantic Fusion</h2>
     <strong>
       <em>IEEE Robotics and Automation Letters</em>
