@@ -216,7 +216,7 @@ data
 ├── mobile_sam.pt
 └── yolov7-e6e.pt
 ```
-
+Note that `train` and `val_mini` are not required and you can choose to delete them.
 ## 🚀 Usage
 > All following commands should be run in the `apexnav` conda environment
 ### ROS Compilation
@@ -250,6 +250,10 @@ python habitat_evaluation.py --dataset mp3d
 
 # You can also evaluate on one specific episode.
 python habitat_evaluation.py --dataset hm3dv2 test_epi_num=10 # episode_id 10
+```
+If you want to generate evaluation videos for each episode (videos will be categorized by task results), you can use the following command:
+```bash
+python habitat_evaluation.py --dataset hm3dv2 need_video=true
 ```
 
 ### 🎮 Keyboard Control in Habitat
