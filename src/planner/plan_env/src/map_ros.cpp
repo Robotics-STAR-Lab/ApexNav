@@ -277,7 +277,7 @@ void MapROS::updateESDFCallback(const ros::TimerEvent& /*event*/)
   map_->updateESDFMap();
   esdf_need_update_ = false;
   double esdf_time = (ros::Time::now() - t1).toSec();
-  ROS_INFO_THROTTLE(10.0, "[Calculating Time] ESDF Map process time = %.3f s", esdf_time);
+  ROS_INFO_THROTTLE(50.0, "[Calculating Time] ESDF Map process time = %.3f s", esdf_time);
 
   esdf_timer_.start();
 }
@@ -322,7 +322,7 @@ void MapROS::depthPoseCallback(
   dilateGrids(free_grids, 1);
   map_->inputDepthCloud2D(filtered_depth_cloud2d_, camera_pos_, free_grids);
   double process_time = (ros::Time::now() - t1).toSec();
-  ROS_INFO_THROTTLE(10.0, "[Calculating Time] Grid Map process time = %.3f s", process_time);
+  ROS_INFO_THROTTLE(50.0, "[Calculating Time] Grid Map process time = %.3f s", process_time);
 
   t1 = ros::Time::now();
   // Update semantic value map if ITM score is available
@@ -330,7 +330,7 @@ void MapROS::depthPoseCallback(
   if (itm_score_ != -1.0)
     map_->value_map_->updateValueMap(camera_pos, camera_yaw, free_grids, itm_score_);
   double value_map_time = (ros::Time::now() - t1).toSec();
-  ROS_INFO_THROTTLE(10.0, "[Calculating Time] Value Map process time = %.3f s", value_map_time);
+  ROS_INFO_THROTTLE(50.0, "[Calculating Time] Value Map process time = %.3f s", value_map_time);
 
   // Trigger ESDF update if local map has been updated
   if (local_updated_) {
@@ -525,7 +525,7 @@ void MapROS::filterPointCloudToXY()
   }
 
   double filter_time = (ros::Time::now() - t1).toSec();
-  ROS_WARN_COND(filter_time > 0.05, "Filter point cloud time maybe a little long = %.3f ms",
+  ROS_WARN_COND(filter_time > 0.1, "Filter point cloud time maybe a little long = %.3f ms",
       filter_time * 1000);
 }
 
