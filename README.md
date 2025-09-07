@@ -5,7 +5,7 @@
       <em>IEEE Robotics and Automation Letters</em>
     </strong>
     <br>
-        <a href="https://zager-zhang.github.io" target="_blank">Mingjie Zhang</a><sup>1</sup>,
+        <a href="https://zager-zhang.github.io" target="_blank">Mingjie Zhang</a><sup>1, 2</sup>,
         <a href="https://personal.hkust-gz.edu.cn/junma/people-page.html" target="_blank">Yuheng Du</a><sup>1</sup>,
         <a href="https://chengkaiwu.me" target="_blank">Chengkai Wu</a><sup>1</sup>,
         Jinni Zhou<sup>1</sup>,
@@ -21,6 +21,7 @@
         </h45>
         <sup>†</sup>Corresponding Authors
     </p>
+    <a href="https://ieeexplore.ieee.org/document/11150727"><img alt="Paper" src="https://img.shields.io/badge/Paper-IEEE-blue"/></a>
     <a href="https://arxiv.org/abs/2504.14478"><img alt="Paper" src="https://img.shields.io/badge/Paper-arXiv-red"/></a>
     <a href='https://robotics-star.com/ApexNav'><img src='https://img.shields.io/badge/Project_Page-ApexNav-green' alt='Project Page'></a>
 
@@ -33,15 +34,14 @@
   </a>
   <br>
   <em>
-    <!-- TODO -->
-    <!-- ApexNav -->
+    ApexNav ensures highly <strong>reliable</strong> object navigation by leveraging <strong>Target-centric Semantic Fusion</strong>, and boosts <strong>efficiency</strong> with its <strong>Adaptive Exploration Strategy</strong>.
   </em>
 </p>
 
 </div>
 
 ## 📢 News
-
+- **[07/09/2025]**:  ApexNav has been published in the Early Access area on IEEE Xplore.
 - **[22/08/2025]**: Release the main algorithm of ApexNav.
 - **[18/08/2025]**: ApexNav is conditionally accepted to RA-L 2025.
 
@@ -161,7 +161,26 @@ pip install -e .
 > Official Reference: https://github.com/facebookresearch/habitat-lab/blob/main/DATASETS.md
 
 ### 🏠 Scene Datasets
-Coming soon.
+**Note:** Both HM3D and MP3D scene datasets require applying for official permission first. You can refer to my commands below, and if you encounter any issues, please refer to the official documentation at https://github.com/facebookresearch/habitat-lab/blob/main/DATASETS.md.
+
+#### HM3D Scene Dataset
+1. Apply for permission at https://matterport.com/habitat-matterport-3d-research-dataset.
+2. Download https://api.matterport.com/resources/habitat/hm3d-val-habitat-v0.2.tar.
+3. Save `hm3d-val-habitat-v0.2.tar` to the `ApexNav/` directory, and the following commands will help you extract and place it in the correct location:
+``` bash
+mkdir -p data/scene_datasets/hm3d/val
+mv hm3d-val-habitat-v0.2.tar data/scene_datasets/hm3d/val/
+cd data/scene_datasets/hm3d/val
+tar -xvf hm3d-val-habitat-v0.2.tar
+rm hm3d-val-habitat-v0.2.tar
+cd ../..
+ln -s hm3d hm3d_v0.2 # Create a symbolic link for hm3d_v0.2
+```
+
+#### MP3D Scene Dataset
+1. Apply for download access at https://niessner.github.io/Matterport/.
+2. After successful application, you will receive a `download_mp.py` script, which should be run with `python2.7` to download the dataset.
+3. After downloading, place the files in `ApexNav/data/scene_datasets`.
 
 ### 🎯 Task Datasets
 ``` bash
@@ -269,7 +288,7 @@ python habitat_manual_control.py --dataset hm3dv1 test_epi_num=10 # episode_id =
 
 - [x] Release the main algorithm of ApexNav
 - [x] Complete Installation and Usage documentation
-- [ ] Add datasets download documentation
+- [x] Add datasets download documentation
 - [ ] Add acknowledgment documentation
 - [ ] Add utility tools documentation
 - [ ] Release the code of real-world deployment
@@ -278,10 +297,14 @@ python habitat_manual_control.py --dataset hm3dv1 test_epi_num=10 # episode_id =
 ## ✒️ Citation
 
 ```bibtex
-@article{zhang2025apexnav,
-  title={ApexNav: An Adaptive Exploration Strategy for Zero-Shot Object Navigation with Target-centric Semantic Fusion},
+@ARTICLE{11150727,
   author={Zhang, Mingjie and Du, Yuheng and Wu, Chengkai and Zhou, Jinni and Qi, Zhenchao and Ma, Jun and Zhou, Boyu},
-  journal={arXiv preprint arXiv:2504.14478},
-  year={2025}
-}
+  journal={IEEE Robotics and Automation Letters}, 
+  title={ApexNav: An Adaptive Exploration Strategy for Zero-Shot Object Navigation with Target-centric Semantic Fusion}, 
+  year={2025},
+  volume={},
+  number={},
+  pages={1-8},
+  keywords={Semantics;Navigation;Training;Robustness;Detectors;Noise measurement;Geometry;Three-dimensional displays;Object recognition;Faces;Search and Rescue Robots;Vision-Based Navigation;Autonomous Agents;},
+  doi={10.1109/LRA.2025.3606388}}
 ```
