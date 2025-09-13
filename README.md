@@ -69,18 +69,7 @@ sudo apt update
 sudo apt-get install libarmadillo-dev libompl-dev
 ```
 
-#### 1.2 FTXUI
-A simple cross-platform C++ library for terminal based user interfaces.
-``` bash
-git clone https://github.com/ArthurSonzogni/FTXUI
-cd FTXUI
-mkdir build && cd build
-cmake ..
-make -j
-sudo make install
-```
-
-#### 1.3 LLM (Optional)
+#### 1.2 LLM (Optional)
 > You can skip LLM configuration and directly use our pre-generated LLM output results in `llm/answers`
 
 ollama 
@@ -89,13 +78,13 @@ curl -fsSL https://ollama.com/install.sh | sh
 ollama pull qwen3:8b
 ```
 
-#### 1.4 External Code Dependencies
+#### 1.3 External Code Dependencies
 ```bash
 git clone git@github.com:WongKinYiu/yolov7.git # yolov7
 git clone https://github.com/IDEA-Research/GroundingDINO.git # GroundingDINO
 ```
 
-#### 1.5 Model Weights Download
+#### 1.4 Model Weights Download
 
 Download the following model weights and place them in the `data/` directory:
 - `mobile_sam.pt`: https://github.com/ChaoningZhang/MobileSAM/tree/master/weights/mobile_sam.pt

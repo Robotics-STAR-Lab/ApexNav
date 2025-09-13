@@ -1,5 +1,0 @@
-<launch>
-    <node pkg="state_monitor" name="state_monitor_node" type="state_monitor_node" output="screen">
-        <param name="/previous_record_path" value="/home/zmj50029563/workspace/ObjectNav_ws/ObjectNav/videos/record_cushion.txt" type="string"/>
-    </node>
-</launch>
