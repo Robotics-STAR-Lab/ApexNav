@@ -45,7 +45,6 @@
 - **[22/08/2025]**: Release the main algorithm of ApexNav.
 - **[18/08/2025]**: ApexNav is conditionally accepted to RA-L 2025.
 
-
 ## 📜 Introduction
 
 **[RA-L'25]** This repository maintains the implementation of "ApexNav: An Adaptive Exploration Strategy for Zero-Shot Object Navigation with Target-centric Semantic Fusion".
@@ -57,9 +56,12 @@ The pipeline of ApexNav is detailed in the overview below.
     <img src="assets/pipeline.jpg" alt="pipeline" width="80%">
   </a>
 </p>
+Please kindly star ⭐ this project if it helps you. Thanks for your support! 💖
 
 ## 🛠️ Installation
 > Tested on Ubuntu 20.04 with ROS Noetic and Python 3.9
+
+You need to install [ROS](https://www.ros.org/), and it is recommended to use [Anaconda](https://www.anaconda.com/) or [Miniconda](https://docs.conda.io/en/latest/miniconda.html) to manage your Python environment.
 
 ### 1. Prerequisites
 
@@ -70,7 +72,7 @@ sudo apt-get install libarmadillo-dev libompl-dev
 ```
 
 #### 1.2 LLM (Optional)
-> You can skip LLM configuration and directly use our pre-generated LLM output results in `llm/answers`
+> You can skip LLM configuration and directly use our pre-generated LLM output results in `llm/answers`.
 
 ollama 
 ``` bash
@@ -278,15 +280,20 @@ python habitat_manual_control.py --dataset hm3dv1 test_epi_num=10 # episode_id =
 - [x] Release the main algorithm of ApexNav
 - [x] Complete Installation and Usage documentation
 - [x] Add datasets download documentation
-- [ ] Add acknowledgment documentation
 - [ ] Add utility tools documentation
 - [ ] Release the code of real-world deployment
 - [ ] Add ROS2 support
 
+
+## 📚 Acknowledgment
+
+We would like to acknowledge the contributions of the following projects:
+- **[VLFM](https://github.com/bdaiinstitute/vlfm)**: For the concept of Vision-Language Frontier Maps.
+- **[FUEL](https://github.com/HKUST-Aerial-Robotics/FUEL)**: For the TSP-based efficient frontier exploration framework.
 ## ✒️ Citation
 
 ```bibtex
-@ARTICLE{11150727,
+@ARTICLE{zhang2025apexnav,
   author={Zhang, Mingjie and Du, Yuheng and Wu, Chengkai and Zhou, Jinni and Qi, Zhenchao and Ma, Jun and Zhou, Boyu},
   journal={IEEE Robotics and Automation Letters}, 
   title={ApexNav: An Adaptive Exploration Strategy for Zero-Shot Object Navigation with Target-centric Semantic Fusion}, 
