@@ -326,7 +326,6 @@ void MapROS::depthPoseCallback(
 
   t1 = ros::Time::now();
   // Update semantic value map if ITM score is available
-  // TODO: Consider expanding free_grids as they may not be comprehensive enough
   if (itm_score_ != -1.0)
     map_->value_map_->updateValueMap(camera_pos, camera_yaw, free_grids, itm_score_);
   double value_map_time = (ros::Time::now() - t1).toSec();

@@ -354,7 +354,7 @@ void ObjectMap2D::mergeCellsIntoObjectCluster(const int& merged_object_id,
     ROS_ERROR("merged_object good cells size = %ld", merged_object.good_cells_.size());
   }
 
-  // Recompute spatial properties (TODO: Convert to incremental updates for efficiency)
+  // Recompute spatial properties
   merged_object.average_.setZero();
   merged_object.box_max2d_ = merged_object.cells_.front();
   merged_object.box_min2d_ = merged_object.cells_.front();
