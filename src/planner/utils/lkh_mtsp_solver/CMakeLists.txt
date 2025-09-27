@@ -4,6 +4,7 @@ project(lkh_mtsp_solver)
 set(CMAKE_BUILD_TYPE "Release")
 set(CMAKE_CXX_FLAGS "-std=c++11")
 set(CMAKE_CXX_FLAGS "-O3 -Wall")
+set(CMAKE_C_FLAGS "-fcommon")
 
 find_package(catkin REQUIRED COMPONENTS
   roscpp
