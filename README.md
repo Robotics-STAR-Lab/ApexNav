@@ -296,11 +296,11 @@ We would like to acknowledge the contributions of the following projects:
 @ARTICLE{zhang2025apexnav,
   author={Zhang, Mingjie and Du, Yuheng and Wu, Chengkai and Zhou, Jinni and Qi, Zhenchao and Ma, Jun and Zhou, Boyu},
   journal={IEEE Robotics and Automation Letters}, 
-  title={ApexNav: An Adaptive Exploration Strategy for Zero-Shot Object Navigation with Target-centric Semantic Fusion}, 
+  title={ApexNAV: An Adaptive Exploration Strategy for Zero-Shot Object Navigation With Target-Centric Semantic Fusion}, 
   year={2025},
-  volume={},
-  number={},
-  pages={1-8},
-  keywords={Semantics;Navigation;Training;Robustness;Detectors;Noise measurement;Geometry;Three-dimensional displays;Object recognition;Faces;Search and Rescue Robots;Vision-Based Navigation;Autonomous Agents;},
+  volume={10},
+  number={11},
+  pages={11530-11537},
+  keywords={Semantics;Navigation;Training;Robustness;Detectors;Noise measurement;Geometry;Three-dimensional displays;Object recognition;Faces;Search and rescue robots;vision-based navigation;autonomous agents},
   doi={10.1109/LRA.2025.3606388}}
 ```
