@@ -41,7 +41,7 @@
 </div>
 
 ## 📢 News
-- **[07/09/2025]**:  ApexNav has been published in the Early Access area on IEEE Xplore.
+- **[07/09/2025]**: ApexNav has been published in the Early Access area on [IEEE Xplore](https://ieeexplore.ieee.org/document/11150727).
 - **[22/08/2025]**: Release the main algorithm of ApexNav.
 - **[18/08/2025]**: ApexNav is conditionally accepted to RA-L 2025.
 
