@@ -48,4 +48,5 @@ add_executable( tsp_node
   ${SRCS}
   src2/tsp_node.cpp
 )
+add_dependencies(tsp_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 target_link_libraries(tsp_node ${catkin_LIBRARIES} lkh_mtsp_solver -lm)
