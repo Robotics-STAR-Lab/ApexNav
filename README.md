@@ -41,6 +41,7 @@
 </div>
 
 ## 📢 News
+- **[10/12/2025]**: ApexNav released real world test example code. Check out the [Real World README](./real_world_test_example/README.md) for more details.
 - **[07/09/2025]**: ApexNav has been published in the Early Access area on [IEEE Xplore](https://ieeexplore.ieee.org/document/11150727).
 - **[22/08/2025]**: Release the main algorithm of ApexNav.
 - **[18/08/2025]**: ApexNav is conditionally accepted to RA-L 2025.
@@ -275,13 +276,26 @@ source ./devel/setup.bash
 python habitat_manual_control.py --dataset hm3dv1 # Default episode_id = 0
 python habitat_manual_control.py --dataset hm3dv1 test_epi_num=10 # episode_id = 10
 ```
+
+### 🤖 Real-world Deployment Example
+If you want to run the real-world test example inside the Habitat simulator, please refer to the [Real World README](./real_world_test_example/README.md) for more details.
+
+<p align="center" style="font-size: 1.0em;">
+  <a href="">
+    <img src="assets/auto_search.gif" alt="apexnav_demo2" width="80%">
+  </a>
+  <br>
+  <em>
+    Trajectory Planning and MPC Control in Real-world Deployment Example in Habitat Simulator.
+  </em>
+</p>
+
 ## 📋 TODO List
 
 - [x] Release the main algorithm of ApexNav
 - [x] Complete Installation and Usage documentation
 - [x] Add datasets download documentation
-- [ ] Add utility tools documentation
-- [ ] Release the code of real-world deployment
+- [x] Release the code of real-world deployment
 - [ ] Add ROS2 support
 
 
