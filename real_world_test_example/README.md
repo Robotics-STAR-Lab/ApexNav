@@ -68,3 +68,8 @@ You can use RViz's *<strong>"2D Nav Goal"</strong>* tool to start autonomous exp
   </a>
   <br>
 </p>
+
+## Acknowledgment
+
+We would like to acknowledge the contributions of the following projects:
+- **[REMANI-Planner](https://github.com/Robotics-STAR-Lab/REMANI-Planner)**: Real-time Whole-body Motion Planning for Mobile Manipulators.
