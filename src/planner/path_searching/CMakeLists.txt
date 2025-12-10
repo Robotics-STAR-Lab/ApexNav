@@ -8,6 +8,7 @@ set(CMAKE_CXX_FLAGS_RELEASE "-O3 -Wall")
 
 find_package(Eigen3 REQUIRED)
 find_package(PCL 1.7 REQUIRED)
+find_package(ompl REQUIRED)
 
 find_package(catkin REQUIRED COMPONENTS
     roscpp
@@ -36,7 +37,9 @@ include_directories(
 
 add_library(path_searching
     src/astar2d.cpp
+    src/kino_astar.cpp 
 )
 target_link_libraries(path_searching
     ${catkin_LIBRARIES}
+    ${OMPL_LIBRARIES}
 )

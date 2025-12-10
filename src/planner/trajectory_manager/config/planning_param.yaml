@@ -1,0 +1,64 @@
+######################## car model ########################
+# Physical parameters
+max_vel: 0.5
+max_acc: 2.0
+max_domega: 1.0
+zoom_omega: 0.25
+max_cur: 10.0
+
+# Wheelbase
+wheel_base: 0.14
+
+# Vehicle dimensions
+length: 0.16
+width: 0.16
+height: 0.20
+
+######################## kinoastar ########################
+# A* oneshot curvature
+astar_cur: 10
+
+# Forward search displacement
+step_arc: 0.2
+
+# Greedy search coefficient
+lambda_heu: 1.0
+
+# Maximum search time
+max_seach_time: 2.0
+
+# Discretization interval for oneshot intermediate point collision checks
+checkl: 0.05
+
+# Number of checks when expanding states in A*
+check_num: 5
+
+# Considered stationary if speed below this
+non_siguav: 0.01
+
+# Oneshot range (TODO: reducing it may cause self-rotation)
+oneshot_range: 0.8
+
+# Sampling time passed to backend
+sampletime: 0.1
+
+# Collision check sampling interval; recommend half of grid_interval
+collision_interval: 0.1
+
+######################## global planning ########################
+time_weight: 15.0
+
+# v_weight  a_weight omega_weight  domega_weight colli_weight
+penaltyWeights: [5, 5, 20, 5, 1000]
+
+# Additional sampling for continuity
+denseResolution: 20
+
+# Average sampling
+sparseResolution: 8
+
+# Backend sampling time
+timeResolution: 1
+
+# Safety distance
+safe_dist: 0.20

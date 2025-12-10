@@ -1,0 +1,12 @@
+mpc:
+  du_threshold: 0.001
+  dt: 0.02
+  max_iter: 150
+  predict_steps: 50
+  delay_num: 2
+  matrix_q: [30.0, 30.0, 2.5, 2.5]
+  matrix_r: [0.1, 0.01]
+  matrix_rd: [0.01, 0.01]
+pd:
+  kp: 0.6
+  kd: 3.0
