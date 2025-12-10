@@ -1,0 +1,67 @@
+defaults:
+  - /benchmark/nav/objectnav:
+      - objectnav_hm3d
+  - _self_
+
+habitat_baselines:
+  evaluate: True
+  force_torch_single_threaded: True
+
+habitat:
+  dataset:
+    split: val
+    data_path: data/datasets/objectnav/hm3d/v2/{split}/{split}.json.gz
+  environment:
+    max_episode_steps: 500000000000000000000
+    iterator_options:
+      cycle: false
+      shuffle: false
+      max_scene_repeat_steps: 10000000000000000000000000000
+  task:
+    lab_sensors:
+      gps_sensor:
+        type: GPSSensor
+        dimensionality: 3
+    measurements:
+      success:
+        success_distance: 0.2
+    actions:
+      move_forward:
+        type: MoveForwardAction
+        tilt_angle: 0
+  simulator:
+    habitat_sim_v0:
+      allow_sliding: true
+      enable_physics: true
+    forward_step_size: 0
+    turn_angle: 0
+    agents:
+      main_agent:
+        sim_sensors:
+          depth_sensor:
+            min_depth: 0.0
+            max_depth: 5.0
+            normalize_depth: true
+
+detector:
+  yolo:
+    confidence_threshold_yolo: 0.3
+    iou_threshold_yolo: 0.5
+    agnostic_nms: True
+
+  groundingDINO:
+    confidence_threshold_dino: 0.40
+    text_threshold: 0.25
+
+llm:
+  use_llm: true
+  llm_answer_path: llm/answers/llm_answer_mp3d.txt
+  llm_response_path: llm/answers/llm_response_list.txt
+  llm_client:
+    llm_client: ollama # local, deepseek, or none
+    ollama: 'qwen3:8b'
+
+record_file_name: "record.txt"
+continue_file_name: "continue.txt"
+video_output_path: "videos/ablation_hm3dv2_{split}"
+test_epi_num: 1

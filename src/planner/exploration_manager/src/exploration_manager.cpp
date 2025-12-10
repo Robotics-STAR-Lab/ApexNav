@@ -12,6 +12,8 @@
 #include <exploration_manager/exploration_data.h>
 #include <lkh_mtsp_solver/SolveMTSP.h>
 #include <plan_env/map_ros.h>
+#include <path_searching/kino_astar.h>
+#include <trajectory_manager/optimizer.h>
 
 using namespace Eigen;
 
@@ -51,6 +53,15 @@ void ExplorationManager::initialize(ros::NodeHandle& nh)
   ray_caster2d_.reset(new RayCaster2D);
   ray_caster2d_->setParams(resolution, origin);
   tsp_client_ = nh.serviceClient<lkh_mtsp_solver::SolveMTSP>("/solve_tsp", true);
+
+  // Initialize KinoAstar and GCopter for real-world trajectory planning
+  kinoastar_.reset(new KinoAstar(nh, sdf_map_));
+  kinoastar_->init();
+  
+  Config gcopter_config(nh);
+  gcopter_.reset(new Gcopter(gcopter_config, nh, sdf_map_, kinoastar_));
+  
+  ROS_INFO("[ExplorationManager] KinoAstar and GCopter initialized for real-world mode");
 }
 
 int ExplorationManager::planNextBestPoint(const Vector3d& pos, const double& yaw)
@@ -641,6 +652,35 @@ void ExplorationManager::calcSemanticFrontierInfo(const vector<SemanticFrontier>
       std::cout << "Value: " << std::fixed << std::setprecision(3) << sem_frontier.semantic_value
                 << std::endl;
   }
+}
+
+bool ExplorationManager::planTrajectory(
+    const Eigen::VectorXd& start, const Eigen::VectorXd& end, const Vector3d& ctrl)
+{
+  if (!gcopter_ || !kinoastar_) {
+    ROS_WARN_THROTTLE(1.0, "[ExplorationManager] GCopter or KinoAstar not initialized for real-world mode");
+    return false;
+  }
+  
+  Eigen::VectorXd goal_state, current_state;
+  Vector3d control = ctrl;
+  goal_state = end;
+  current_state = start;
+
+  // Kinodynamic A* search
+  kinoastar_->reset();
+  kinoastar_->search(goal_state, current_state, control);
+  kinoastar_->getKinoNode();
+  
+  if (kinoastar_->has_path_) {
+    kinoastar_->kinoastarFlatPathPub(kinoastar_->flat_trajs_);
+    gcopter_->minco_plan();
+    std::vector<Trajectory<7, 3>> final_trajes = gcopter_->final_trajes;
+    gcopter_->mincoPathPub(gcopter_->final_trajes, gcopter_->final_singuls);
+    return true;
+  }
+  
+  return false;
 }
 
 }  // namespace apexnav_planner

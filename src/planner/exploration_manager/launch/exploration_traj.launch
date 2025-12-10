@@ -1,0 +1,56 @@
+<launch>
+  <!-- Real-world exploration launch file -->
+
+  <!-- size of map, change the size in x, y according to your application -->
+  <arg name="map_size_x" value="80.0"/>
+  <arg name="map_size_y" value="80.0"/>
+
+  <!-- Real-world mode flag -->
+  <arg name="is_real_world" default="true"/>
+
+  <!-- topic of your odometry such as VIO or LIO -->
+  <arg name="odom_topic" value="/habitat/odom" />
+  <!-- transform of camera frame in the world frame -->
+  <arg name="sensor_pose_topic" value="/habitat/sensor_pose"/>
+  <!-- depth image, 640x480 by default -->
+  <arg name="depth_topic" value="/habitat/camera_depth"/>
+
+  <!-- TODO: Load real-world specific configuration -->
+  <!-- <rosparam file="$(find exploration_manager)/config/real_world_params.yaml" command="load" /> -->
+
+  <!-- main algorithm params -->
+  <include file="$(find exploration_manager)/launch/algorithm_traj.xml">
+    <!-- Pass real-world flag to exploration node -->
+    <arg name="is_real_world_" value="$(arg is_real_world)"/>
+
+    <arg name="map_size_x_" value="$(arg map_size_x)"/>
+    <arg name="map_size_y_" value="$(arg map_size_y)"/>
+
+    <arg name="odometry_topic_" value="$(arg odom_topic)"/>
+    <arg name="sensor_pose_topic_" value="$(arg sensor_pose_topic)"/>
+    <arg name="depth_topic_" value="$(arg depth_topic)"/>
+
+    <!-- intrinsic params of the depth camera - TODO: update for your camera -->
+    <arg name="cx_" value="320"/>
+    <arg name="cy_" value="240"/>
+    <arg name="fx_" value="388.1910413097385"/>
+    <arg name="fy_" value="422.0475153598262"/>
+  </include>
+
+  <!-- Trajectory server for real robot control -->
+  <node pkg="trajectory_manager" name="traj_server_node" type="traj_server" output="screen">
+    <rosparam file="$(find trajectory_manager)/config/control_param.yaml" command="load" />
+    <remap from="~odometry" to="$(arg odom_topic)"/>
+    <remap from="~trajectory" to="/planning/trajectory"/>
+    <remap from="~cmd_vel" to="/cmd_vel"/>
+
+    <!-- Real-world specific parameters -->
+    <param name="need_init" value="false" type="bool"/>
+    <param name="max_correction_vel" value="1.0" type="double"/>
+    <param name="max_correction_omega" value="1.57" type="double"/>
+  </node>
+
+  <!-- TODO: Add additional real-world nodes if needed -->
+  <!-- e.g., localization, sensor drivers, safety monitors, etc. -->
+
+</launch>

@@ -18,6 +18,7 @@ find_package(catkin REQUIRED COMPONENTS
   vis_utils
   cv_bridge
   lkh_mtsp_solver
+  trajectory_manager
 )
 
 catkin_package(
@@ -38,6 +39,7 @@ include_directories(
 add_executable(exploration_node
   src/exploration_node.cpp
   src/exploration_fsm.cpp
+  src/exploration_fsm_traj.cpp
   src/exploration_manager.cpp
 )
 target_link_libraries(exploration_node

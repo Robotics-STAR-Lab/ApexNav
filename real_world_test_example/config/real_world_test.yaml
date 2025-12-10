@@ -1,0 +1,44 @@
+detector:
+  yolo:
+    confidence_threshold_yolo: 0.3
+    iou_threshold_yolo: 0.5
+    agnostic_nms: True
+
+  groundingDINO:
+    confidence_threshold_dino: 0.40
+    text_threshold: 0.25
+
+use_llm: true
+
+llm:
+  llm_answer_path: llm/answers/llm_answer_mp3d.txt
+  llm_response_path: llm/answers/llm_response_list.txt
+  llm_client:
+    llm_client: ollama # deepseek, ollama, or none
+    ollama: 'qwen3:8b'
+
+habitat_sensor:
+  camera_min_depth: 0.0
+  camera_max_depth: 5.0
+  camera_height: 0.88
+  hfov: 79
+  height: 480
+  width: 640
+
+
+habitat:
+  simulator:
+    agents:
+      main_agent:
+        sim_sensors:
+          depth_sensor:
+            # position: [x, y, z] (y is camera height)
+            position: [0.0, 0.88, 0.0]
+            min_depth: 0.0
+            max_depth: 5.0
+            hfov: 79
+            height: 480
+            width: 640
+
+record_file_name: "record.txt"
+continue_file_name: "continue.txt"

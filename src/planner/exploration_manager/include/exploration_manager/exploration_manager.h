@@ -34,6 +34,8 @@ using std::vector;
 namespace apexnav_planner {
 class SDFMap2D;
 class FrontierMap2D;
+class Gcopter;
+class KinoAstar;
 struct ExplorationParam;
 struct ExplorationData;
 
@@ -72,6 +74,7 @@ public:
   void initialize(ros::NodeHandle& nh);
 
   int planNextBestPoint(const Vector3d& pos, const double& yaw);
+  bool planTrajectory(const Eigen::VectorXd& start, const Eigen::VectorXd& end, const Vector3d& ctrl);
   void getSortedSemanticFrontiers(const Vector2d& cur_pos, const vector<Vector2d>& frontiers,
       vector<SemanticFrontier>& sem_frontiers);
   void calcSemanticFrontierInfo(const vector<SemanticFrontier>& sem_frontiers, double& std_dev,
@@ -83,6 +86,8 @@ public:
   shared_ptr<FrontierMap2D> frontier_map2d_;  ///< 2D frontier map
   shared_ptr<ObjectMap2D> object_map2d_;      ///< 2D object map
   shared_ptr<SDFMap2D> sdf_map_;              ///< Signed distance field map
+  shared_ptr<Gcopter> gcopter_;               ///< Trajectory optimizer (for real-world)
+  shared_ptr<KinoAstar> kinoastar_;           ///< Kinodynamic A* planner (for real-world)
 
   typedef shared_ptr<ExplorationManager> Ptr;
 
