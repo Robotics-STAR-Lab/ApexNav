@@ -50,8 +50,10 @@ source ./devel/setup.bash && python ./real_world_test_example/real_world_test_ha
   </a>
 </p>
 
+#### Manually Set Goal in RViz
 
 You can use RViz's *<strong>"2D Pose Estimate"</strong>* tool to set a target pose so the robot can navigate to a specified location.
+
 <p align="center" style="font-size: 1.0em;">
   <a href="">
     <img src="../assets/point2point.gif" alt="apexnav_demo1" width="80%">
@@ -59,8 +61,9 @@ You can use RViz's *<strong>"2D Pose Estimate"</strong>* tool to set a target po
   <br>
 </p>
 
-You can use RViz's *<strong>"2D Nav Goal"</strong>* tool to start autonomous exploration.
+#### Autonomous Object Navigation
 
+You can use RViz's *<strong>"2D Nav Goal"</strong>* tool to start autonomous exploration.
 
 <p align="center" style="font-size: 1.0em;">
   <a href="">
