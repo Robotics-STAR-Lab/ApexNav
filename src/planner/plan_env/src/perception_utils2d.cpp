@@ -9,15 +9,15 @@ PerceptionUtils2D::PerceptionUtils2D(ros::NodeHandle& nh)
   nh.param("perception_utils/max_dist", max_dist_, -1.0);
   nh.param("perception_utils/vis_dist", vis_dist_, -1.0);
 
-  // 初始化 FOV 法向量（改为基于 X 轴正方向）
+  // Initialize FOV normal vectors (based on +X direction)
   n_left_ << cos(M_PI_2 - left_angle_), sin(M_PI_2 - left_angle_);
   n_right_ << cos(-M_PI_2 + right_angle_), sin(-M_PI_2 + right_angle_);
 
-  // 初始化 FOV 顶点（改为基于 X 轴正方向）
-  double vert = vis_dist_ * tan(left_angle_);  // 上下高度
-  Vector2d origin(0, 0);                       // 原点
-  Vector2d left(vis_dist_, vert);              // 左侧顶点
-  Vector2d right(vis_dist_, -vert);            // 右侧顶点
+  // Initialize FOV vertices (based on +X direction)
+  double vert = vis_dist_ * tan(left_angle_);  // vertical extent
+  Vector2d origin(0, 0);                       // origin
+  Vector2d left(vis_dist_, vert);              // left vertex
+  Vector2d right(vis_dist_, -vert);            // right vertex
 
   cam_vertices1_.push_back(origin);
   cam_vertices2_.push_back(left);
@@ -33,7 +33,7 @@ void PerceptionUtils2D::setPose(const Vector2d& pos, const double& yaw)
   pos_ = pos;
   yaw_ = yaw;
 
-  // 计算当前 FOV 法向量
+  // Compute current FOV normal vectors
   Matrix2d R_wb;
   R_wb << cos(yaw_), -sin(yaw_), sin(yaw_), cos(yaw_);
 
@@ -48,7 +48,7 @@ void PerceptionUtils2D::getFOV(vector<Vector2d>& list1, vector<Vector2d>& list2)
   list1.clear();
   list2.clear();
 
-  // 获取当前 FOV 的顶点
+  // Get current FOV vertices
   Matrix2d Rwb;
   Rwb << cos(yaw_), -sin(yaw_), sin(yaw_), cos(yaw_);
   for (int i = 0; i < (int)cam_vertices1_.size(); ++i) {
@@ -62,12 +62,12 @@ void PerceptionUtils2D::getFOV(vector<Vector2d>& list1, vector<Vector2d>& list2)
 bool PerceptionUtils2D::insideFOV(const Vector2d& point)
 {
   Vector2d dir = point - pos_;
-  if (dir.norm() > max_dist_)  // 仅考虑 x, y 平面的距离
+  if (dir.norm() > max_dist_)  // Only consider distance in the x-y plane
     return false;
 
-  dir.normalize();  // 标准化
+  dir.normalize();  // Normalize
   for (auto n : normals_) {
-    if (dir.dot(n) < 0.0)  // 与法向量的点积判断是否在 FOV 内
+    if (dir.dot(n) < 0.0)  // Use dot product with normals to determine if inside FOV
       return false;
   }
   return true;

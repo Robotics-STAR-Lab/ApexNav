@@ -1,11 +1,11 @@
 # MultipleMasksWithConfidence.msg
 
 
-# 包含多个掩码，每个掩码是一个布尔数组
+# Contains multiple masks; each mask is a boolean array
 sensor_msgs/PointCloud2[] point_clouds
 
-# 对应的多个置信度得分
+# Corresponding confidence scores
 float32[] confidence_scores
 
-# label索引列表
+# List of label indices
 int32[] label_indices

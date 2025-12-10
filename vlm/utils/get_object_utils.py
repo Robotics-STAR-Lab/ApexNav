@@ -180,20 +180,20 @@ def get_object_with_itm(label, img, cfg):
 
 
 def crop_and_expand_box(img, detections, idx, expand_pixels=0.4):
-    # 获取框的坐标，格式为 [x_min, y_min, x_max, y_max]
+    # Get bounding box coordinates in [x_min, y_min, x_max, y_max] format
     x_min, y_min, x_max, y_max = detections.boxes[idx]
     x_min = int(x_min * img.shape[1])
     y_min = int(y_min * img.shape[0])
     x_max = int(x_max * img.shape[1])
     y_max = int(y_max * img.shape[0])
 
-    # 向外扩展框，注意不要超出图像边界
+    # Expand the box outward; clamp to image boundaries
     x_min = max(int(x_min*(1-expand_pixels)), 0)
     y_min = max(int(y_min*(1-expand_pixels)), 0)
     x_max = min(int(x_max*(1+expand_pixels)), img.shape[1] - 1)
     y_max = min(int(y_max*(1+expand_pixels)), img.shape[0] - 1)
 
-    # 裁剪图像，仅保留框内内容
+    # Crop the image to keep only the box region
     img_detected = img[y_min:y_max+1, x_min:x_max+1]
 
     return img_detected

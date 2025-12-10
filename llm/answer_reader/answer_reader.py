@@ -19,11 +19,11 @@ def read_answer(llm_answer_path, llm_response_path, label, llm_client):
             print(llm_answer)
             f.write(f"\n{label}: {llm_answer}")
             print(f"New Answer for {label}: {llm_answer}")
-            # 将response写入llm_response_path文件
+            # Write the response to the llm_response_path file
             with open(llm_response_path, "a+") as response_file:
                 response_file.write(
                     f"\n{label}: {response}"
-                )  # 将label和对应的response写入文件
+                )  # Write the label and its corresponding response to the file
                 print(f"Response saved to {llm_response_path}: {response}")
                 
     if isinstance(llm_answer[-1], str):
