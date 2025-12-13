@@ -16,6 +16,9 @@
 
     <!-- main node -->
     <node pkg="exploration_manager" name="exploration_node" type="exploration_node" output="screen">
+        <!-- Load trajectory planning parameters for real-world mode (Only Trajectory Use) -->
+        <rosparam file="$(find trajectory_manager)/config/planning_param.yaml" command="load" />
+
         <remap from ="/odom_world"    to = "$(arg odometry_topic_)"/>
         <remap from ="/map_ros/pose"  to = "$(arg sensor_pose_topic_)"/>
         <remap from ="/map_ros/depth" to = "$(arg depth_topic_)"/>
