@@ -193,7 +193,9 @@ wget -O data/datasets/objectnav/mp3d/v1.zip https://dl.fbaipublicfiles.com/habit
 unzip data/datasets/objectnav/mp3d/v1.zip -d data/datasets/objectnav/mp3d/v1 && rm data/datasets/objectnav/mp3d/v1.zip
 ```
 
-Your final folder `data` structure should look like this:
+<details>
+<summary>Make sure that the folder `data` structure has the following structure:</summary>
+
 ```
 data
 ├── datasets
@@ -227,7 +229,10 @@ data
 ├── mobile_sam.pt
 └── yolov7-e6e.pt
 ```
+
 Note that `train` and `val_mini` are not required and you can choose to delete them.
+</details>
+
 ## 🚀 Usage
 > All following commands should be run in the `apexnav` conda environment
 ### ROS Compilation
