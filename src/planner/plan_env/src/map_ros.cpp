@@ -39,7 +39,7 @@ void MapROS::init()
 
   // Handle Habitat simulator vs real-world configuration
   bool is_real_world;
-  node_.param("fsm/is_real_world", is_real_world, false);
+  node_.param("is_real_world", is_real_world, false);
 
   if (!is_real_world) {
     // Override depth parameters with Habitat simulator settings

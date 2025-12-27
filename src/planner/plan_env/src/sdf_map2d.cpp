@@ -57,7 +57,7 @@ void SDFMap2D::initMap(ros::NodeHandle& nh)
 
   // Check if using habitat simulator and override parameters if necessary
   bool is_real_world;
-  nh.param("fsm/is_real_world", is_real_world, false);
+  nh.param("is_real_world", is_real_world, false);
 
   if (!is_real_world) {
     double habitat_max_depth, agent_radius;

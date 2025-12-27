@@ -58,7 +58,10 @@
         <param name="map_ros/frame_id" value="world"/>
         <param name="map_ros/virtual_ground_height" value="-0.34"/>
 
-        <param name="fsm/is_real_world" value="false" type="bool"/>
+        <param name="fsm/replan_time" value="0.30" type="double"/>
+        <param name="fsm/replan_traj_end_threshold" value="1.0" type="double"/>
+        <param name="fsm/replan_frontier_change_delay" value="1.0" type="double"/>
+        <param name="fsm/replan_timeout" value="3.0" type="double"/>
 
         <!-- Exploration manager -->
         <!-- 0: distance 1: semantic 2: hybrid(TSP sem + closest dist) 3: TSP(distance) -->
@@ -68,7 +71,7 @@
         <param name="exploration/max_to_mean_percentage" value="0.90" type="double"/>
         <param name="exploration/tsp_dir" value="$(find lkh_mtsp_solver)/resource" type="string"/>
 
-        <param name="frontier/cluster_min" value="2" type="int"/>
+        <param name="frontier/cluster_min" value="5" type="int"/>
         <param name="frontier/cluster_size_xy" value="0.65" type="double"/>
         <param name="frontier/min_view_finish_fraction" value="0.2" type="double"/>
         <param name="frontier/min_contain_unknown" value="30" type="int"/>

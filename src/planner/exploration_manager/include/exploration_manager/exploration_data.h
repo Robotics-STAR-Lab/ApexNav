@@ -88,9 +88,9 @@ struct FSMParam {
   {
     vis_scale_ = 0.1;
     replan_time_ = 0.2;
-    replan_time1_ = 1.0;
-    replan_time2_ = 0.5;
-    replan_time3_ = 2.0;
+    replan_traj_end_threshold_ = 1.0;
+    replan_frontier_change_delay_ = 0.5;
+    replan_timeout_ = 2.0;
 
     const double step_length = 0.25;
     const double angle_increment = M_PI / 6;
@@ -105,9 +105,9 @@ struct FSMParam {
   std::vector<Eigen::Vector2d> action_steps_;
   // replan timing parameters (loaded from ros params in ExplorationFSM::init)
   double replan_time_;
-  double replan_time1_;
-  double replan_time2_;
-  double replan_time3_;
+  double replan_traj_end_threshold_;
+  double replan_frontier_change_delay_;
+  double replan_timeout_;
 };
 
 struct ExplorationData {

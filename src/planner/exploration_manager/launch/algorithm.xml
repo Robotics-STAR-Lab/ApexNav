@@ -58,8 +58,6 @@
         <param name="map_ros/frame_id" value="world"/>
         <param name="map_ros/virtual_ground_height" value="-0.34"/>
 
-        <param name="fsm/is_real_world" value="false" type="bool"/>
-
         <!-- Exploration manager -->
         <!-- 0: distance 1: semantic 2: hybrid(TSP sem + closest dist) 3: TSP(distance) -->
         <param name="exploration/policy" value="2" type="int"/>

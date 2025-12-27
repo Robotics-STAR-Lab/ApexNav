@@ -23,9 +23,9 @@ void ExplorationFSMReal::init(ros::NodeHandle& nh)
 
   // Load real-world specific parameters
   nh.param("fsm/replan_time", fp_->replan_time_, 0.2);
-  nh.param("fsm/replan_time1", fp_->replan_time1_, 1.0);
-  nh.param("fsm/replan_time2", fp_->replan_time2_, 0.5);
-  nh.param("fsm/replan_time3", fp_->replan_time3_, 2.0);
+  nh.param("fsm/replan_traj_end_threshold", fp_->replan_traj_end_threshold_, 1.0);
+  nh.param("fsm/replan_frontier_change_delay", fp_->replan_frontier_change_delay_, 0.5);
+  nh.param("fsm/replan_timeout", fp_->replan_timeout_, 2.0);
 
   /* ROS Timer */
   exec_timer_ = nh.createTimer(
@@ -37,8 +37,7 @@ void ExplorationFSMReal::init(ros::NodeHandle& nh)
   /* ROS Subscriber */
   trigger_sub_ =
       nh.subscribe("/move_base_simple/goal", 10, &ExplorationFSMReal::triggerCallback, this);
-  goal_sub_ = nh.subscribe(
-      "/initialpose", 10, &ExplorationFSMReal::goalCallback, this);
+  goal_sub_ = nh.subscribe("/initialpose", 10, &ExplorationFSMReal::goalCallback, this);
   odom_sub_ = nh.subscribe("/odom_world", 10, &ExplorationFSMReal::odometryCallback, this);
   confidence_threshold_sub_ = nh.subscribe(
       "/detector/confidence_threshold", 10, &ExplorationFSMReal::confidenceThresholdCallback, this);
@@ -168,7 +167,7 @@ void ExplorationFSMReal::FSMCallback(const ros::TimerEvent& e)
       double time_to_end = info->duration - t_cur;
 
       // Replan if trajectory is almost finished
-      if (time_to_end < fp_->replan_time1_ && info->duration < fp_->replan_time1_) {
+      if (time_to_end < fp_->replan_traj_end_threshold_) {
         transitState(RealFSM::State::PLAN_TRAJ, "FSM");
         ROS_WARN("[Real] Replan: traj fully executed");
         exec_timer_.start();
@@ -176,7 +175,8 @@ void ExplorationFSMReal::FSMCallback(const ros::TimerEvent& e)
       }
 
       // Replan if frontier changed during exploration
-      if (t_cur > fp_->replan_time2_ && fd_->final_result_ == FINAL_RESULT::EXPLORE &&
+      if (t_cur > fp_->replan_frontier_change_delay_ &&
+          fd_->final_result_ == FINAL_RESULT::EXPLORE &&
           expl_manager_->frontier_map2d_->isAnyFrontierChanged()) {
         transitState(RealFSM::State::PLAN_TRAJ, "FSM");
         ROS_WARN("[Real] Replan: frontier changed");
@@ -185,7 +185,7 @@ void ExplorationFSMReal::FSMCallback(const ros::TimerEvent& e)
       }
 
       // Replan if trajectory timeout
-      if (t_cur > fp_->replan_time3_) {
+      if (t_cur > fp_->replan_timeout_) {
         transitState(RealFSM::State::PLAN_TRAJ, "FSM");
         ROS_WARN("[Real] Replan: time out");
         exec_timer_.start();
@@ -484,7 +484,7 @@ void ExplorationFSMReal::odometryCallback(const nav_msgs::OdometryConstPtr& msg)
   fd_->odom_omega_(2) = msg->twist.twist.angular.z;
 
   fd_->have_odom_ = true;
-  
+
   // Publish robot marker for visualization
   publishRobotMarker();
 }
