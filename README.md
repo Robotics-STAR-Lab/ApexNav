@@ -6,7 +6,7 @@
     </strong>
     <br>
         <a href="https://zager-zhang.github.io" target="_blank">Mingjie Zhang</a><sup>1, 2</sup>,
-        <a href="https://personal.hkust-gz.edu.cn/junma/people-page.html" target="_blank">Yuheng Du</a><sup>1</sup>,
+        Yuheng Du<sup>1</sup>,
         <a href="https://chengkaiwu.me" target="_blank">Chengkai Wu</a><sup>1</sup>,
         Jinni Zhou<sup>1</sup>,
         Zhenchao Qi<sup>1</sup>,
@@ -41,6 +41,7 @@
 </div>
 
 ## 📢 News
+- **[10/02/2026]**: ROS2 Jazzy support is now available! Thanks to [romaster93](https://github.com/romaster93) for contributing the ROS2 interface. Check out the [ros2-jazzy](https://github.com/Robotics-STAR-Lab/ApexNav/tree/ros2-jazzy) branch.
 - **[10/12/2025]**: ApexNav released real world test example code. Check out the [Real World README](./real_world_test_example/README.md) for more details.
 - **[07/09/2025]**: ApexNav has been published in the Early Access area on [IEEE Xplore](https://ieeexplore.ieee.org/document/11150727).
 - **[22/08/2025]**: Release the main algorithm of ApexNav.
@@ -301,7 +302,7 @@ If you want to run the real-world test example inside the Habitat simulator, ple
 - [x] Complete Installation and Usage documentation
 - [x] Add datasets download documentation
 - [x] Release the code of real-world deployment
-- [ ] Add ROS2 support
+- [x] Add ROS2 support
 
 
 ## 📚 Acknowledgment
