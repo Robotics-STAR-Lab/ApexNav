@@ -13,10 +13,11 @@
 #include <plan_env/object_map2d.h>
 
 namespace apexnav_planner {
-ObjectMap2D::ObjectMap2D(SDFMap2D* sdf_map, ros::NodeHandle& nh)
+ObjectMap2D::ObjectMap2D(SDFMap2D* sdf_map, rclcpp::Node::SharedPtr node)
 {
   // Initialize core mapping components
   this->sdf_map_ = sdf_map;
+  this->node_ = node;
   int voxel_num = sdf_map_->getVoxelNum();
   object_buffer_ = vector<char>(voxel_num, 0);  // Object occupancy flags per grid cell
   object_indexs_ = vector<int>(voxel_num, -1);  // Object ID mapping per grid cell
@@ -27,13 +28,26 @@ ObjectMap2D::ObjectMap2D(SDFMap2D* sdf_map, ros::NodeHandle& nh)
 
   // Load configuration parameters
   min_confidence_ = -1.0;  // Default to accept all detections
-  nh.param("object/min_observation_num", min_observation_num_, 2);
-  nh.param("object/fusion_type", fusion_type_, 1);
-  nh.param("object/use_observation", use_observation_, true);
-  nh.param("object/vis_cloud", is_vis_cloud_, false);
+  if (!node->has_parameter("object.min_observation_num")) {
+    node->declare_parameter("object.min_observation_num", 2);
+  }
+  if (!node->has_parameter("object.fusion_type")) {
+    node->declare_parameter("object.fusion_type", 1);
+  }
+  if (!node->has_parameter("object.use_observation")) {
+    node->declare_parameter("object.use_observation", true);
+  }
+  if (!node->has_parameter("object.vis_cloud")) {
+    node->declare_parameter("object.vis_cloud", false);
+  }
 
-  // Setup ROS communication
-  object_cloud_pub_ = nh.advertise<sensor_msgs::PointCloud2>("/object/clouds", 10);
+  node->get_parameter("object.min_observation_num", min_observation_num_);
+  node->get_parameter("object.fusion_type", fusion_type_);
+  node->get_parameter("object.use_observation", use_observation_);
+  node->get_parameter("object.vis_cloud", is_vis_cloud_);
+
+  // Setup ROS2 communication
+  object_cloud_pub_ = node->create_publisher<sensor_msgs::msg::PointCloud2>("/object/clouds", 10);
 
   // Configure raycasting for spatial queries
   raycaster_.reset(new RayCaster2D);
@@ -49,7 +63,7 @@ ObjectMap2D::ObjectMap2D(SDFMap2D* sdf_map, ros::NodeHandle& nh)
 void ObjectMap2D::setConfidenceThreshold(double val)
 {
   min_confidence_ = val;
-  ROS_INFO("Set Confidence Threshold = %f", val);
+  RCLCPP_INFO(node_->get_logger(), "Set Confidence Threshold = %f", val);
 }
 
 /**
@@ -206,7 +220,7 @@ int ObjectMap2D::searchSingleObjectCluster(const DetectedObject& detected_object
 
   // Validate successful clustering
   if (obj_idx == -1) {
-    ROS_ERROR("[bug] Why not find the object cluster!?");
+    RCLCPP_ERROR(node_->get_logger(), "[bug] Why not find the object cluster!?");
     return obj_idx;
   }
 
@@ -280,16 +294,18 @@ void ObjectMap2D::createNewObjectCluster(
   *obj.clouds_[label] = *detected_object.cloud;
 
   // Compute 3D bounding box from point cloud
-  obj.box_max3d_ = Vector3d(obj.clouds_[label]->points[0].x, obj.clouds_[label]->points[0].y,
-      obj.clouds_[label]->points[0].z);
-  obj.box_min3d_ = Vector3d(obj.clouds_[label]->points[0].x, obj.clouds_[label]->points[0].y,
-      obj.clouds_[label]->points[0].z);
+  if (!obj.clouds_[label]->points.empty()) {
+    obj.box_max3d_ = Vector3d(obj.clouds_[label]->points[0].x, obj.clouds_[label]->points[0].y,
+        obj.clouds_[label]->points[0].z);
+    obj.box_min3d_ = Vector3d(obj.clouds_[label]->points[0].x, obj.clouds_[label]->points[0].y,
+        obj.clouds_[label]->points[0].z);
 
-  for (auto pt : obj.clouds_[label]->points) {
-    Vector3d vec_pt = Vector3d(pt.x, pt.y, pt.z);
-    for (int i = 0; i < 3; ++i) {
-      obj.box_min3d_[i] = min(obj.box_min3d_[i], vec_pt[i]);
-      obj.box_max3d_[i] = max(obj.box_max3d_[i], vec_pt[i]);
+    for (auto pt : obj.clouds_[label]->points) {
+      Vector3d vec_pt = Vector3d(pt.x, pt.y, pt.z);
+      for (int i = 0; i < 3; ++i) {
+        obj.box_min3d_[i] = min(obj.box_min3d_[i], vec_pt[i]);
+        obj.box_max3d_[i] = max(obj.box_max3d_[i], vec_pt[i]);
+      }
     }
   }
 
@@ -351,7 +367,7 @@ void ObjectMap2D::mergeCellsIntoObjectCluster(const int& merged_object_id,
           merged_object.good_cells_.push_back(cell);
       }
     }
-    ROS_ERROR("merged_object good cells size = %ld", merged_object.good_cells_.size());
+    RCLCPP_ERROR(node_->get_logger(), "merged_object good cells size = %ld", merged_object.good_cells_.size());
   }
 
   // Recompute spatial properties
@@ -380,6 +396,10 @@ void ObjectMap2D::mergeCellsIntoObjectCluster(const int& merged_object_id,
   else {
     // Merge with existing observations using point cloud fusion
     pcl::PointCloud<pcl::PointXYZ>::Ptr merged_cloud(new pcl::PointCloud<pcl::PointXYZ>());
+    if (!merged_object.clouds_[label] || merged_object.clouds_[label]->points.empty()) {
+      RCLCPP_WARN(node_->get_logger(), "clouds_[%d] is null or empty before merge, reinitializing", label);
+      merged_object.clouds_[label].reset(new pcl::PointCloud<pcl::PointXYZ>());
+    }
     *merged_cloud = *(merged_object.clouds_[label]);  // Copy existing cloud
     *merged_cloud += *(detected_object.cloud);        // Add new observations
 
@@ -389,6 +409,16 @@ void ObjectMap2D::mergeCellsIntoObjectCluster(const int& merged_object_id,
     voxel_filter.setLeafSize(leaf_size_, leaf_size_, leaf_size_);
     voxel_filter.filter(*merged_cloud);
     merged_object.clouds_[label] = merged_cloud;
+
+    // Guard against empty cloud after voxel filtering
+    if (merged_object.clouds_[label]->points.empty()) {
+      RCLCPP_WARN(node_->get_logger(), "Empty cloud after voxel filter for label %d, skipping update", label);
+      merged_object.observation_nums_[label]++;
+      merged_object.observation_cloud_sums_[label] += detected_object.cloud->points.size();
+      merged_object.confidence_scores_[label] = detected_object.score;
+      printFusionInfo(merged_object, label, "[Fusion-EmptyCloud]");
+      return;
+    }
 
     // Update 3D bounding box from merged point cloud
     merged_object.box_max3d_ = Vector3d(merged_object.clouds_[label]->points[0].x,
@@ -409,8 +439,13 @@ void ObjectMap2D::mergeCellsIntoObjectCluster(const int& merged_object_id,
     merged_object.observation_cloud_sums_[label] += detected_object.cloud->points.size();
 
     // Prepare confidence fusion parameters
-    int last_total = last_objects[merged_object_id].clouds_[label]->points.size();
-    double last_total_confidence = last_objects[merged_object_id].confidence_scores_[label];
+    int last_total = 0;
+    double last_total_confidence = 0.0;
+    if (last_objects[merged_object_id].clouds_[label] &&
+        !last_objects[merged_object_id].clouds_[label]->points.empty()) {
+      last_total = last_objects[merged_object_id].clouds_[label]->points.size();
+      last_total_confidence = last_objects[merged_object_id].confidence_scores_[label];
+    }
     int now_observation = detected_object.cloud->points.size();
     double now_confidence = detected_object.score;
     int now_total = merged_object.clouds_[label]->points.size();

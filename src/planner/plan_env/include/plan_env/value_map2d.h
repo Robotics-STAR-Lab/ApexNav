@@ -1,7 +1,7 @@
 #ifndef _VALUE_MAP_H_
 #define _VALUE_MAP_H_
 
-#include <ros/ros.h>
+#include <rclcpp/rclcpp.hpp>
 #include <Eigen/Eigen>
 #include <vector>
 
@@ -19,7 +19,7 @@ class SDFMap2D;
 
 class ValueMap {
 public:
-  ValueMap(SDFMap2D* sdf_map, ros::NodeHandle& nh);
+  ValueMap(SDFMap2D* sdf_map, rclcpp::Node::SharedPtr node);
   ~ValueMap(){};
 
   void updateValueMap(const Vector2d& sensor_pos, const double& sensor_yaw,

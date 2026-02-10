@@ -1,7 +1,7 @@
 #ifndef _FRONTIER_MAP2D_H_
 #define _FRONTIER_MAP2D_H_
 
-#include <ros/ros.h>
+#include <rclcpp/rclcpp.hpp>
 #include <Eigen/Eigen>
 #include <memory>
 #include <vector>
@@ -15,7 +15,7 @@
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
 #include <pcl/conversions.h>
-#include <pcl_ros/point_cloud.h>
+#include <pcl_conversions/pcl_conversions.h>
 #include <pcl/filters/voxel_grid.h>
 
 // Type aliases for improved readability
@@ -50,7 +50,7 @@ struct Frontier2D {
 
 class FrontierMap2D {
 public:
-  FrontierMap2D(const shared_ptr<SDFMap2D>& sdf_map, ros::NodeHandle& nh);
+  FrontierMap2D(const shared_ptr<SDFMap2D>& sdf_map, rclcpp::Node::SharedPtr node);
   ~FrontierMap2D(){};
 
   void searchFrontiers();

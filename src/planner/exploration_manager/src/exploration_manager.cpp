@@ -10,10 +10,11 @@
 
 #include <exploration_manager/exploration_manager.h>
 #include <exploration_manager/exploration_data.h>
-#include <lkh_mtsp_solver/SolveMTSP.h>
+#include <lkh_mtsp_solver/srv/solve_mtsp.hpp>
 #include <plan_env/map_ros.h>
 #include <path_searching/kino_astar.h>
 #include <trajectory_manager/optimizer.h>
+#include <cmath>
 
 using namespace Eigen;
 
@@ -21,28 +22,46 @@ namespace apexnav_planner {
 
 ExplorationManager::~ExplorationManager() = default;
 
-void ExplorationManager::initialize(ros::NodeHandle& nh)
+void ExplorationManager::initialize(rclcpp::Node::SharedPtr node)
 {
+  node_ = node;
+
   // Initialize SDF map and get object map reference
   sdf_map_.reset(new SDFMap2D);
-  sdf_map_->initMap(nh);
+  sdf_map_->initMap(node_);
   object_map2d_ = sdf_map_->object_map2d_;
 
   // Initialize frontier map and path finder
-  frontier_map2d_.reset(new FrontierMap2D(sdf_map_, nh));
+  frontier_map2d_.reset(new FrontierMap2D(sdf_map_, node_));
   path_finder_.reset(new Astar2D);
-  path_finder_->init(nh, sdf_map_);
+  path_finder_->init(node_, sdf_map_);
 
   // Initialize exploration data and parameter containers
   ed_.reset(new ExplorationData);
   ep_.reset(new ExplorationParam);
 
-  // Load exploration parameters from ROS parameter server
-  nh.param("exploration/policy", ep_->policy_mode_, 0);
-  nh.param("exploration/sigma_threshold", ep_->sigma_threshold_, 0.030);
-  nh.param("exploration/max_to_mean_threshold", ep_->max_to_mean_threshold_, 1.2);
-  nh.param("exploration/max_to_mean_percentage", ep_->max_to_mean_percentage_, 0.95);
-  nh.param("exploration/tsp_dir", ep_->tsp_dir_, string("null"));
+  // Load exploration parameters from ROS2 parameter server
+  if (!node_->has_parameter("exploration/policy")) {
+    node_->declare_parameter("exploration/policy", 0);
+  }
+  if (!node_->has_parameter("exploration/sigma_threshold")) {
+    node_->declare_parameter("exploration/sigma_threshold", 0.030);
+  }
+  if (!node_->has_parameter("exploration/max_to_mean_threshold")) {
+    node_->declare_parameter("exploration/max_to_mean_threshold", 1.2);
+  }
+  if (!node_->has_parameter("exploration/max_to_mean_percentage")) {
+    node_->declare_parameter("exploration/max_to_mean_percentage", 0.95);
+  }
+  if (!node_->has_parameter("exploration/tsp_dir")) {
+    node_->declare_parameter("exploration/tsp_dir", std::string("null"));
+  }
+
+  ep_->policy_mode_ = node_->get_parameter("exploration/policy").as_int();
+  ep_->sigma_threshold_ = node_->get_parameter("exploration/sigma_threshold").as_double();
+  ep_->max_to_mean_threshold_ = node_->get_parameter("exploration/max_to_mean_threshold").as_double();
+  ep_->max_to_mean_percentage_ = node_->get_parameter("exploration/max_to_mean_percentage").as_double();
+  ep_->tsp_dir_ = node_->get_parameter("exploration/tsp_dir").as_string();
 
   // Get map parameters for ray casting initialization
   double resolution = sdf_map_->getResolution();
@@ -52,22 +71,24 @@ void ExplorationManager::initialize(ros::NodeHandle& nh)
   // Initialize ray caster for collision checking and TSP service client
   ray_caster2d_.reset(new RayCaster2D);
   ray_caster2d_->setParams(resolution, origin);
-  tsp_client_ = nh.serviceClient<lkh_mtsp_solver::SolveMTSP>("/solve_tsp", true);
+  tsp_cb_group_ = node_->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
+  tsp_client_ = node_->create_client<lkh_mtsp_solver::srv::SolveMTSP>(
+      "/solve_tsp", rmw_qos_profile_services_default, tsp_cb_group_);
 
   // Initialize KinoAstar and GCopter for real-world trajectory planning
-  kinoastar_.reset(new KinoAstar(nh, sdf_map_));
+  kinoastar_.reset(new KinoAstar(node_, sdf_map_));
   kinoastar_->init();
-  
-  Config gcopter_config(nh);
-  gcopter_.reset(new Gcopter(gcopter_config, nh, sdf_map_, kinoastar_));
-  
-  ROS_INFO("[ExplorationManager] KinoAstar and GCopter initialized for real-world mode");
+
+  Config gcopter_config(node_);
+  gcopter_.reset(new Gcopter(gcopter_config, node_, sdf_map_, kinoastar_));
+
+  RCLCPP_INFO(node_->get_logger(), "[ExplorationManager] KinoAstar and GCopter initialized for real-world mode");
 }
 
 int ExplorationManager::planNextBestPoint(const Vector3d& pos, const double& yaw)
 {
   Vector2d pos2d = Vector2d(pos(0), pos(1));
-  ros::Time t1 = ros::Time::now();
+  auto t1 = node_->get_clock()->now();
   auto t2 = t1;
 
   // Clear previous planning results
@@ -78,7 +99,7 @@ int ExplorationManager::planNextBestPoint(const Vector3d& pos, const double& yaw
 
   // ==================== Navigation Mode: High-Confidence Objects ====================
   if (!object_clouds.empty()) {
-    ROS_WARN("[Navigation Mode] Get object_cloud num = %ld", object_clouds.size());
+    RCLCPP_WARN(node_->get_logger(), "[Navigation Mode] Get object_cloud num = %ld", object_clouds.size());
 
     // Try to find path to each detected object in order of confidence
     for (auto object_cloud : object_clouds) {
@@ -89,7 +110,7 @@ int ExplorationManager::planNextBestPoint(const Vector3d& pos, const double& yaw
 
   // ==================== Navigation Mode: Over-Depth Objects ====================
   if (!object_map2d_->over_depth_object_cloud_->points.empty()) {
-    ROS_WARN("[Navigation Mode (Over Depth)] Get over depth object cloud");
+    RCLCPP_WARN(node_->get_logger(), "[Navigation Mode (Over Depth)] Get over depth object cloud");
     if (searchObjectPath(
             pos, object_map2d_->over_depth_object_cloud_, ed_->next_pos_, ed_->next_best_path_))
       return SEARCH_OVER_DEPTH_OBJECT;
@@ -109,7 +130,7 @@ int ExplorationManager::planNextBestPoint(const Vector3d& pos, const double& yaw
 
   // Handle case when no passable frontiers are found
   if (next_best_path.empty()) {
-    ROS_WARN("Maybe no passable frontier.");
+    RCLCPP_WARN(node_->get_logger(), "Maybe no passable frontier.");
 
     // Try suspicious objects as backup
     if (!top_object_cloud->points.empty() &&
@@ -122,7 +143,7 @@ int ExplorationManager::planNextBestPoint(const Vector3d& pos, const double& yaw
 
     // Extreme search mode when all normal options fail
     if (next_best_path.empty()) {
-      ROS_ERROR("search exterme case!!!");
+      RCLCPP_ERROR(node_->get_logger(), "search exterme case!!!");
 
       // Try extreme object search with relaxed constraints
       for (auto object_cloud : object_clouds) {
@@ -154,11 +175,11 @@ int ExplorationManager::planNextBestPoint(const Vector3d& pos, const double& yaw
     // Final error handling when no valid targets exist
     if (next_best_path.empty()) {
       if (ed_->frontiers_.empty()) {
-        ROS_ERROR("No coverable frontier!!");
+        RCLCPP_ERROR(node_->get_logger(), "No coverable frontier!!");
         return NO_COVERABLE_FRONTIER;
       }
       else {
-        ROS_ERROR("No passable frontier!!");
+        RCLCPP_ERROR(node_->get_logger(), "No passable frontier!!");
         return NO_PASSABLE_FRONTIER;
       }
     }
@@ -169,8 +190,10 @@ int ExplorationManager::planNextBestPoint(const Vector3d& pos, const double& yaw
   ed_->next_best_path_ = next_best_path;
 
   // Performance monitoring
-  double total_time = (ros::Time::now() - t2).toSec();
-  ROS_ERROR_COND(total_time > 0.25, "[Plan NBV] Total time %.2lf s too long!!!", total_time);
+  double total_time = (node_->get_clock()->now() - t2).seconds();
+  if (total_time > 0.25) {
+    RCLCPP_ERROR(node_->get_logger(), "[Plan NBV] Total time %.2lf s too long!!!", total_time);
+  }
 
   return EXPLORATION;
 }
@@ -180,27 +203,27 @@ void ExplorationManager::chooseExplorationPolicy(Vector2d cur_pos, vector<Vector
 {
   switch (ep_->policy_mode_) {
     case ExplorationParam::DISTANCE:
-      ROS_WARN("[Exploration Mode] Find Closest Frontier");
+      RCLCPP_WARN(node_->get_logger(), "[Exploration Mode] Find Closest Frontier");
       findClosestFrontierPolicy(cur_pos, frontiers, next_best_pos, next_best_path);
       break;
 
     case ExplorationParam::SEMANTIC:
-      ROS_WARN("[Exploration Mode] Find Highest Semantic Value Frontier");
+      RCLCPP_WARN(node_->get_logger(), "[Exploration Mode] Find Highest Semantic Value Frontier");
       findHighestSemanticsFrontierPolicy(cur_pos, frontiers, next_best_pos, next_best_path);
       break;
 
     case ExplorationParam::HYBRID:
-      ROS_WARN("[Exploration Mode] Working on Hybrid Mode");
+      RCLCPP_WARN(node_->get_logger(), "[Exploration Mode] Working on Hybrid Mode");
       hybridExplorePolicy(cur_pos, frontiers, next_best_pos, next_best_path);
       break;
 
     case ExplorationParam::TSP_DIST:
-      ROS_WARN("[Exploration Mode] Working on TSP Distance Mode");
+      RCLCPP_WARN(node_->get_logger(), "[Exploration Mode] Working on TSP Distance Mode");
       findTSPTourPolicy(cur_pos, frontiers, next_best_pos, next_best_path);
       break;
 
     default:
-      ROS_WARN("[Exploration Mode] Unknown Mode");
+      RCLCPP_WARN(node_->get_logger(), "[Exploration Mode] Unknown Mode");
       break;
   }
 }
@@ -220,13 +243,13 @@ void ExplorationManager::hybridExplorePolicy(Vector2d cur_pos, vector<Vector2d> 
 
   // Decide between exploitation and exploration based on semantic statistics
   if (std_dev > std_dev_threshold && max_to_mean > max_to_mean_threshold) {
-    ROS_WARN("Exploit the semantic value (TSP)!!");
+    RCLCPP_WARN(node_->get_logger(), "Exploit the semantic value (TSP)!!");
     vector<Vector2d> high_sem_frontiers;
 
     // Select high-value frontiers for TSP optimization
     for (auto sem_frontier : sem_frontiers) {
       double auto_max_to_mean_threshold =
-          max(max_to_mean_threshold, ep_->max_to_mean_percentage_ * max_to_mean);
+          std::max(max_to_mean_threshold, ep_->max_to_mean_percentage_ * max_to_mean);
       if (sem_frontier.semantic_value / mean < auto_max_to_mean_threshold)
         break;
       high_sem_frontiers.push_back(sem_frontier.position);
@@ -234,7 +257,7 @@ void ExplorationManager::hybridExplorePolicy(Vector2d cur_pos, vector<Vector2d> 
     findTSPTourPolicy(cur_pos, high_sem_frontiers, next_best_pos, next_best_path);
   }
   else {
-    ROS_WARN("Explore the environment (Closest)!!");
+    RCLCPP_WARN(node_->get_logger(), "Explore the environment (Closest)!!");
     findClosestFrontierPolicy(cur_pos, frontiers, next_best_pos, next_best_path);
   }
 }
@@ -255,7 +278,7 @@ void ExplorationManager::findHighestSemanticsFrontierPolicy(Vector2d cur_pos,
 
     // Find maximum semantic value in local neighborhood
     double value = sdf_map_->value_map_->getValue(idx);
-    for (auto nbr : nbrs) value = max(value, sdf_map_->value_map_->getValue(nbr));
+    for (auto nbr : nbrs) value = std::max(value, sdf_map_->value_map_->getValue(nbr));
 
     frontier_values.emplace_back(frontier, value);
   }
@@ -394,7 +417,7 @@ void ExplorationManager::computeATSPTour(
 {
   indices.clear();
   if (frontiers.empty()) {
-    ROS_ERROR("No frontier to compute tsp!");
+    RCLCPP_ERROR(node_->get_logger(), "No frontier to compute tsp!");
     return;
   }
   else if (frontiers.size() == 1) {
@@ -402,22 +425,22 @@ void ExplorationManager::computeATSPTour(
     return;
   }
   /* change ATSP to lhk3 */
-  auto t1 = ros::Time::now();
+  auto t1 = node_->get_clock()->now();
 
   // Get cost matrix for current state and clusters
   Eigen::MatrixXd cost_mat;
   computeATSPCostMatrix(cur_pos, frontiers, cost_mat);
   const int dimension = cost_mat.rows();
 
-  double mat_time = (ros::Time::now() - t1).toSec();
-  t1 = ros::Time::now();
+  double mat_time = (node_->get_clock()->now() - t1).seconds();
+  t1 = node_->get_clock()->now();
 
   // Initialize ATSP par file
   // Create problem file
-  ofstream file(ep_->tsp_dir_ + "/atsp_tour.atsp");
+  std::ofstream file(ep_->tsp_dir_ + "/atsp_tour.atsp");
   file << "NAME : amtsp\n";
   file << "TYPE : ATSP\n";
-  file << "DIMENSION : " + to_string(dimension) + "\n";
+  file << "DIMENSION : " + std::to_string(dimension) + "\n";
   file << "EDGE_WEIGHT_TYPE : EXPLICIT\n";
   file << "EDGE_WEIGHT_FORMAT : FULL_MATRIX\n";
   file << "EDGE_WEIGHT_SECTION\n";
@@ -435,7 +458,7 @@ void ExplorationManager::computeATSPTour(
   file.open(ep_->tsp_dir_ + "/atsp_tour.par");
   file << "SPECIAL\n";
   file << "PROBLEM_FILE = " + ep_->tsp_dir_ + "/atsp_tour.atsp\n";
-  file << "SALESMEN = " << to_string(drone_num) << "\n";
+  file << "SALESMEN = " << std::to_string(drone_num) << "\n";
   file << "MTSP_OBJECTIVE = MINSUM\n";
   file << "RUNS = 1\n";
   file << "TRACE_LEVEL = 0\n";
@@ -444,16 +467,20 @@ void ExplorationManager::computeATSPTour(
 
   auto par_dir = ep_->tsp_dir_ + "/atsp_tour.atsp";
 
-  lkh_mtsp_solver::SolveMTSP srv;
-  srv.request.prob = 1;
-  if (!tsp_client_.call(srv)) {
-    ROS_ERROR("Fail to solve ATSP.");
+  auto request = std::make_shared<lkh_mtsp_solver::srv::SolveMTSP::Request>();
+  request->prob = 1;
+
+  auto result = tsp_client_->async_send_request(request);
+  // Wait for service response without re-spinning the node (avoids executor conflict)
+  auto status = result.wait_for(std::chrono::seconds(5));
+  if (status != std::future_status::ready) {
+    RCLCPP_ERROR(node_->get_logger(), "Fail to solve ATSP.");
     return;
   }
 
   // Read optimal tour from the tour section of result file
-  ifstream res_file(ep_->tsp_dir_ + "/atsp_tour.tour");
-  string res;
+  std::ifstream res_file(ep_->tsp_dir_ + "/atsp_tour.tour");
+  std::string res;
   while (getline(res_file, res)) {
     // Go to tour section
     if (res.compare("TOUR_SECTION") == 0)
@@ -473,17 +500,32 @@ void ExplorationManager::computeATSPTour(
 
   res_file.close();
 
-  // for (auto idx : indices) ROS_WARN("ATSP idx = %d", idx);
-
-  double tsp_time = (ros::Time::now() - t1).toSec();
-  ROS_WARN("[ATSP Tour] Cost mat: %lf, TSP: %lf", mat_time, tsp_time);
+  double tsp_time = (node_->get_clock()->now() - t1).seconds();
+  RCLCPP_WARN(node_->get_logger(), "[ATSP Tour] Cost mat: %lf, TSP: %lf", mat_time, tsp_time);
 }
 
 Vector2d ExplorationManager::findNearestObjectPoint(
     const Vector3d& start, const pcl::shared_ptr<pcl::PointCloud<pcl::PointXYZ>>& object_cloud)
 {
+  if (!object_cloud || object_cloud->empty()) {
+    RCLCPP_ERROR(node_->get_logger(), "[Bug] Object cloud is empty.");
+    return Vector2d(-1000.0, -1000.0);
+  }
+
+  // Filter out NaN/Inf points
+  pcl::shared_ptr<pcl::PointCloud<pcl::PointXYZ>> valid_cloud(new pcl::PointCloud<pcl::PointXYZ>);
+  for (const auto& pt : object_cloud->points) {
+    if (std::isfinite(pt.x) && std::isfinite(pt.y) && std::isfinite(pt.z)) {
+      valid_cloud->points.push_back(pt);
+    }
+  }
+  if (valid_cloud->empty()) {
+    RCLCPP_ERROR(node_->get_logger(), "[Bug] All object cloud points are NaN/Inf.");
+    return Vector2d(-1000.0, -1000.0);
+  }
+
   pcl::KdTreeFLANN<pcl::PointXYZ> kdtree;
-  kdtree.setInputCloud(object_cloud);
+  kdtree.setInputCloud(valid_cloud);
   std::vector<int> pointIdxNKNSearch(1);
   std::vector<float> pointNKNSquaredDistance(1);
 
@@ -492,13 +534,19 @@ Vector2d ExplorationManager::findNearestObjectPoint(
   cur_pt.y = start(1);
   cur_pt.z = start(2);
 
+  // Check if search point is valid
+  if (!std::isfinite(cur_pt.x) || !std::isfinite(cur_pt.y) || !std::isfinite(cur_pt.z)) {
+    RCLCPP_ERROR(node_->get_logger(), "[Bug] Start point has NaN/Inf coordinates.");
+    return Vector2d(-1000.0, -1000.0);
+  }
+
   if (kdtree.nearestKSearch(cur_pt, 1, pointIdxNKNSearch, pointNKNSquaredDistance) <= 0) {
-    ROS_ERROR("[Bug] No nearest object point found.");
+    RCLCPP_ERROR(node_->get_logger(), "[Bug] No nearest object point found.");
     return Vector2d(-1000.0, -1000.0);  // Error indicator
   }
 
   int nearest_idx = pointIdxNKNSearch[0];
-  auto nearest_point = object_cloud->points[nearest_idx];
+  auto nearest_point = valid_cloud->points[nearest_idx];
   return Vector2d(nearest_point.x, nearest_point.y);
 }
 
@@ -529,7 +577,7 @@ bool ExplorationManager::trySearchObjectPathWithDistance(const Vector2d& start2d
       refined_path = path_finder_->getPath();
       refined_pos = tmp_pos;
       if (!debug_msg.empty()) {
-        ROS_WARN("%s", debug_msg.c_str());
+        RCLCPP_WARN(node_->get_logger(), "%s", debug_msg.c_str());
       }
       return true;
     }
@@ -562,7 +610,7 @@ bool ExplorationManager::searchObjectPath(const Vector3d& start,
     }
   }
 
-  ROS_ERROR("Failed to find object path.");
+  RCLCPP_ERROR(node_->get_logger(), "Failed to find object path.");
   return false;
 }
 
@@ -629,7 +677,7 @@ void ExplorationManager::calcSemanticFrontierInfo(const vector<SemanticFrontier>
   double max_value = 0.0;
   for (const auto& frontier : sem_frontiers) {
     sum += frontier.semantic_value;
-    max_value = max(max_value, frontier.semantic_value);
+    max_value = std::max(max_value, frontier.semantic_value);
   }
   mean = sum / sem_frontiers.size();
 
@@ -658,10 +706,11 @@ bool ExplorationManager::planTrajectory(
     const Eigen::VectorXd& start, const Eigen::VectorXd& end, const Vector3d& ctrl)
 {
   if (!gcopter_ || !kinoastar_) {
-    ROS_WARN_THROTTLE(1.0, "[ExplorationManager] GCopter or KinoAstar not initialized for real-world mode");
+    RCLCPP_WARN_THROTTLE(node_->get_logger(), *node_->get_clock(), 1000,
+        "[ExplorationManager] GCopter or KinoAstar not initialized for real-world mode");
     return false;
   }
-  
+
   Eigen::VectorXd goal_state, current_state;
   Vector3d control = ctrl;
   goal_state = end;
@@ -671,7 +720,7 @@ bool ExplorationManager::planTrajectory(
   kinoastar_->reset();
   kinoastar_->search(goal_state, current_state, control);
   kinoastar_->getKinoNode();
-  
+
   if (kinoastar_->has_path_) {
     kinoastar_->kinoastarFlatPathPub(kinoastar_->flat_trajs_);
     gcopter_->minco_plan();
@@ -679,7 +728,7 @@ bool ExplorationManager::planTrajectory(
     gcopter_->mincoPathPub(gcopter_->final_trajes, gcopter_->final_singuls);
     return true;
   }
-  
+
   return false;
 }
 

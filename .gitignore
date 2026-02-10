@@ -13,6 +13,15 @@ lockfiles
 
 .catkin_workspace
 .vscode
+.claude/
+.omc/
+
+# ROS2 colcon build artifacts
+install/
+log/
+
+# Personal notes
+ROS2STUDY.md
 
 yolov7
 traced_model.pt

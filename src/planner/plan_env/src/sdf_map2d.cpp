@@ -20,22 +20,47 @@
 namespace apexnav_planner {
 SDFMap2D::~SDFMap2D() = default;
 
-void SDFMap2D::initMap(ros::NodeHandle& nh)
+void SDFMap2D::initMap(rclcpp::Node::SharedPtr node)
 {
   mp_.reset(new MapParam2D);
   md_.reset(new MapData2D);
   map_ros_.reset(new MapROS);
 
-  // Load map properties from ROS parameters
+  // Load map properties from ROS2 parameters
   double x_size, y_size;
-  nh.param("sdf_map/ray_mode", mp_->ray_mode_, 0);
-  nh.param("sdf_map/resolution", mp_->resolution_, -1.0);
-  nh.param("sdf_map/map_size_x", x_size, -1.0);
-  nh.param("sdf_map/map_size_y", y_size, -1.0);
-  nh.param("sdf_map/obstacles_inflation", mp_->obstacles_inflation_, -1.0);
-  nh.param("sdf_map/local_bound", mp_->local_bound_, 1.0);
-  nh.param("sdf_map/optimistic", mp_->optimistic_, true);
-  nh.param("sdf_map/signed_dist", mp_->signed_dist_, false);
+  if (!node->has_parameter("sdf_map.ray_mode")) {
+    node->declare_parameter("sdf_map.ray_mode", 0);
+  }
+  if (!node->has_parameter("sdf_map.resolution")) {
+    node->declare_parameter("sdf_map.resolution", -1.0);
+  }
+  if (!node->has_parameter("sdf_map.map_size_x")) {
+    node->declare_parameter("sdf_map.map_size_x", -1.0);
+  }
+  if (!node->has_parameter("sdf_map.map_size_y")) {
+    node->declare_parameter("sdf_map.map_size_y", -1.0);
+  }
+  if (!node->has_parameter("sdf_map.obstacles_inflation")) {
+    node->declare_parameter("sdf_map.obstacles_inflation", -1.0);
+  }
+  if (!node->has_parameter("sdf_map.local_bound")) {
+    node->declare_parameter("sdf_map.local_bound", 1.0);
+  }
+  if (!node->has_parameter("sdf_map.optimistic")) {
+    node->declare_parameter("sdf_map.optimistic", true);
+  }
+  if (!node->has_parameter("sdf_map.signed_dist")) {
+    node->declare_parameter("sdf_map.signed_dist", false);
+  }
+
+  node->get_parameter("sdf_map.ray_mode", mp_->ray_mode_);
+  node->get_parameter("sdf_map.resolution", mp_->resolution_);
+  node->get_parameter("sdf_map.map_size_x", x_size);
+  node->get_parameter("sdf_map.map_size_y", y_size);
+  node->get_parameter("sdf_map.obstacles_inflation", mp_->obstacles_inflation_);
+  node->get_parameter("sdf_map.local_bound", mp_->local_bound_);
+  node->get_parameter("sdf_map.optimistic", mp_->optimistic_);
+  node->get_parameter("sdf_map.signed_dist", mp_->signed_dist_);
   mp_->default_dist_ = 0.0;
 
   // Calculate map boundaries and resolution parameters
@@ -48,30 +73,57 @@ void SDFMap2D::initMap(ros::NodeHandle& nh)
   mp_->map_max_boundary_ = mp_->map_origin_ + mp_->map_size_;
 
   // Load raycasting parameters for probabilistic occupancy fusion
-  nh.param("sdf_map/p_hit", mp_->p_hit_, 0.70);
-  nh.param("sdf_map/p_miss", mp_->p_miss_, 0.35);
-  nh.param("sdf_map/p_min", mp_->p_min_, 0.12);
-  nh.param("sdf_map/p_max", mp_->p_max_, 0.97);
-  nh.param("sdf_map/p_occ", mp_->p_occ_, 0.80);
-  nh.param("sdf_map/max_ray_length", mp_->max_ray_length_, -0.1);
+  if (!node->has_parameter("sdf_map.p_hit")) {
+    node->declare_parameter("sdf_map.p_hit", 0.70);
+  }
+  if (!node->has_parameter("sdf_map.p_miss")) {
+    node->declare_parameter("sdf_map.p_miss", 0.35);
+  }
+  if (!node->has_parameter("sdf_map.p_min")) {
+    node->declare_parameter("sdf_map.p_min", 0.12);
+  }
+  if (!node->has_parameter("sdf_map.p_max")) {
+    node->declare_parameter("sdf_map.p_max", 0.97);
+  }
+  if (!node->has_parameter("sdf_map.p_occ")) {
+    node->declare_parameter("sdf_map.p_occ", 0.80);
+  }
+  if (!node->has_parameter("sdf_map.max_ray_length")) {
+    node->declare_parameter("sdf_map.max_ray_length", -0.1);
+  }
+
+  node->get_parameter("sdf_map.p_hit", mp_->p_hit_);
+  node->get_parameter("sdf_map.p_miss", mp_->p_miss_);
+  node->get_parameter("sdf_map.p_min", mp_->p_min_);
+  node->get_parameter("sdf_map.p_max", mp_->p_max_);
+  node->get_parameter("sdf_map.p_occ", mp_->p_occ_);
+  node->get_parameter("sdf_map.max_ray_length", mp_->max_ray_length_);
 
   // Check if using habitat simulator and override parameters if necessary
-  bool is_real_world;
-  nh.param("is_real_world", is_real_world, false);
+  bool is_real_world = false;
+  if (!node->has_parameter("is_real_world")) {
+    node->declare_parameter("is_real_world", false);
+  }
+  node->get_parameter("is_real_world", is_real_world);
 
   if (!is_real_world) {
-    double habitat_max_depth, agent_radius;
-    nh.param("/habitat/simulator/agents/main_agent/sim_sensors/depth_sensor/max_depth",
-        habitat_max_depth, -1.0);
-    nh.param("/habitat/simulator/agents/main_agent/radius", agent_radius, -1.0);
+    double habitat_max_depth = -1.0, agent_radius = -1.0;
+    if (!node->has_parameter("habitat.simulator.agents.main_agent.sim_sensors.depth_sensor.max_depth")) {
+      node->declare_parameter("habitat.simulator.agents.main_agent.sim_sensors.depth_sensor.max_depth", -1.0);
+    }
+    if (!node->has_parameter("habitat.simulator.agents.main_agent.radius")) {
+      node->declare_parameter("habitat.simulator.agents.main_agent.radius", -1.0);
+    }
+    node->get_parameter("habitat.simulator.agents.main_agent.sim_sensors.depth_sensor.max_depth", habitat_max_depth);
+    node->get_parameter("habitat.simulator.agents.main_agent.radius", agent_radius);
     if (habitat_max_depth != -1.0) {
       mp_->max_ray_length_ = habitat_max_depth - 1e-3;
-      ROS_WARN(
+      RCLCPP_WARN(node->get_logger(),
           "Using habitat simulator params, set max_ray_length_ = %.2f m", mp_->max_ray_length_);
     }
     if (agent_radius != -1.0) {
       mp_->obstacles_inflation_ = agent_radius;
-      ROS_WARN("Using habitat simulator params, set obstacles_inflation_ = %.2f m",
+      RCLCPP_WARN(node->get_logger(), "Using habitat simulator params, set obstacles_inflation_ = %.2f m",
           mp_->obstacles_inflation_);
     }
   }
@@ -84,7 +136,7 @@ void SDFMap2D::initMap(ros::NodeHandle& nh)
   mp_->clamp_max_log_ = logit(mp_->p_max_);
   mp_->min_occupancy_log_ = logit(mp_->p_occ_);
   mp_->unknown_flag_ = 0.01;
-  ROS_INFO("prob_hit_log = %f, prob_miss_log = %f", mp_->prob_hit_log_, mp_->prob_miss_log_);
+  RCLCPP_INFO(node->get_logger(), "prob_hit_log = %f, prob_miss_log = %f", mp_->prob_hit_log_, mp_->prob_miss_log_);
 
   // Initialize map data structures and buffers
   mp_->buffer_size_ = mp_->map_voxel_num_(0) * mp_->map_voxel_num_(1);
@@ -107,11 +159,11 @@ void SDFMap2D::initMap(ros::NodeHandle& nh)
   md_->update_min_ = md_->update_max_ = Eigen::Vector2i(0, 0);
   md_->update_mind_ = md_->update_maxd_ = Eigen::Vector2d(0, 0);
 
-  // Initialize ROS components and raycaster
-  object_map2d_.reset(new ObjectMap2D(this, nh));
-  value_map_.reset(new ValueMap(this, nh));
+  // Initialize ROS2 components and raycaster
+  object_map2d_.reset(new ObjectMap2D(this, node));
+  value_map_.reset(new ValueMap(this, node));
   map_ros_->setMap(this);
-  map_ros_->node_ = nh;
+  map_ros_->setNode(node);
   map_ros_->init();
 
   caster_.reset(new RayCaster2D);

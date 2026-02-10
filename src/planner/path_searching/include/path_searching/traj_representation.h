@@ -6,8 +6,6 @@
 #include <Eigen/Geometry>
 #include <Eigen/Eigenvalues>
 
-#include <ros/ros.h>
-#include <ros/package.h>
 #include <iostream>
 #include <string>
 #include <sstream>

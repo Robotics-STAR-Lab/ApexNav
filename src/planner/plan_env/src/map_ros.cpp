@@ -1,15 +1,30 @@
 /**
  * @file map_ros.cpp
- * @brief Implementation of ROS interface for 2D SDF mapping system
+ * @brief Implementation of ROS2 interface for 2D SDF mapping system
  *
- * This file implements the MapROS class which provides the ROS interface for
+ * This file implements the MapROS class which provides the ROS2 interface for
  * the 2D signed distance field mapping system. It handles sensor data processing,
  * object detection integration, and real-time map visualization.
- * 
+ *
  * @author Zager-Zhang
  */
 
 #include <plan_env/map_ros.h>
+#include <pcl_conversions/pcl_conversions.h>
+#include <pcl/point_cloud.h>
+#include <pcl/point_types.h>
+#include <pcl/filters/voxel_grid.h>
+#include <pcl/filters/radius_outlier_removal.h>
+#include <pcl/filters/crop_box.h>
+#include <pcl/segmentation/extract_clusters.h>
+#include <pcl/search/kdtree.h>
+
+#include <vector>
+#include <chrono>
+#include <functional>
+
+using namespace std;
+using namespace std::chrono_literals;
 
 namespace apexnav_planner {
 
@@ -18,40 +33,91 @@ void MapROS::setMap(SDFMap2D* map)
   this->map_ = map;
 }
 
+void MapROS::setNode(rclcpp::Node::SharedPtr node)
+{
+  node_ = node;
+}
+
 void MapROS::init()
 {
-  // Load camera intrinsic parameters from ROS parameter server
-  node_.param("map_ros/fx", fx_, -1.0);
-  node_.param("map_ros/fy", fy_, -1.0);
-  node_.param("map_ros/cx", cx_, -1.0);
-  node_.param("map_ros/cy", cy_, -1.0);
+  // Load camera intrinsic parameters from ROS2 parameter server
+  if (!node_->has_parameter("map_ros/fx")) {
+    node_->declare_parameter("map_ros/fx", -1.0);
+  }
+  if (!node_->has_parameter("map_ros/fy")) {
+    node_->declare_parameter("map_ros/fy", -1.0);
+  }
+  if (!node_->has_parameter("map_ros/cx")) {
+    node_->declare_parameter("map_ros/cx", -1.0);
+  }
+  if (!node_->has_parameter("map_ros/cy")) {
+    node_->declare_parameter("map_ros/cy", -1.0);
+  }
+  fx_ = node_->get_parameter("map_ros/fx").as_double();
+  fy_ = node_->get_parameter("map_ros/fy").as_double();
+  cx_ = node_->get_parameter("map_ros/cx").as_double();
+  cy_ = node_->get_parameter("map_ros/cy").as_double();
 
   // Load depth filtering parameters
-  node_.param("map_ros/depth_filter_maxdist", depth_filter_maxdist_, -1.0);
-  node_.param("map_ros/depth_filter_mindist", depth_filter_mindist_, -1.0);
-  node_.param("map_ros/depth_filter_margin", depth_filter_margin_, -1);
-  node_.param("map_ros/filter_min_height", filter_min_height_, 0.5);
-  node_.param("map_ros/filter_max_height", filter_max_height_, 0.88);
-  node_.param("map_ros/k_depth_scaling_factor", k_depth_scaling_factor_, -1.0);
-  node_.param("map_ros/skip_pixel", skip_pixel_, -1);
-  node_.param("map_ros/frame_id", frame_id_, string("world"));
-  node_.param("map_ros/virtual_ground_height", virtual_ground_height_, -0.28);
+  if (!node_->has_parameter("map_ros/depth_filter_maxdist")) {
+    node_->declare_parameter("map_ros/depth_filter_maxdist", -1.0);
+  }
+  if (!node_->has_parameter("map_ros/depth_filter_mindist")) {
+    node_->declare_parameter("map_ros/depth_filter_mindist", -1.0);
+  }
+  if (!node_->has_parameter("map_ros/depth_filter_margin")) {
+    node_->declare_parameter("map_ros/depth_filter_margin", -1);
+  }
+  if (!node_->has_parameter("map_ros/filter_min_height")) {
+    node_->declare_parameter("map_ros/filter_min_height", 0.5);
+  }
+  if (!node_->has_parameter("map_ros/filter_max_height")) {
+    node_->declare_parameter("map_ros/filter_max_height", 0.88);
+  }
+  if (!node_->has_parameter("map_ros/k_depth_scaling_factor")) {
+    node_->declare_parameter("map_ros/k_depth_scaling_factor", -1.0);
+  }
+  if (!node_->has_parameter("map_ros/skip_pixel")) {
+    node_->declare_parameter("map_ros/skip_pixel", -1);
+  }
+  if (!node_->has_parameter("map_ros/frame_id")) {
+    node_->declare_parameter("map_ros/frame_id", "world");
+  }
+  if (!node_->has_parameter("map_ros/virtual_ground_height")) {
+    node_->declare_parameter("map_ros/virtual_ground_height", -0.28);
+  }
+
+  depth_filter_maxdist_ = node_->get_parameter("map_ros/depth_filter_maxdist").as_double();
+  depth_filter_mindist_ = node_->get_parameter("map_ros/depth_filter_mindist").as_double();
+  depth_filter_margin_ = node_->get_parameter("map_ros/depth_filter_margin").as_int();
+  filter_min_height_ = node_->get_parameter("map_ros/filter_min_height").as_double();
+  filter_max_height_ = node_->get_parameter("map_ros/filter_max_height").as_double();
+  k_depth_scaling_factor_ = node_->get_parameter("map_ros/k_depth_scaling_factor").as_double();
+  skip_pixel_ = node_->get_parameter("map_ros/skip_pixel").as_int();
+  frame_id_ = node_->get_parameter("map_ros/frame_id").as_string();
+  virtual_ground_height_ = node_->get_parameter("map_ros/virtual_ground_height").as_double();
 
   // Handle Habitat simulator vs real-world configuration
-  bool is_real_world;
-  node_.param("is_real_world", is_real_world, false);
+  if (!node_->has_parameter("is_real_world")) {
+    node_->declare_parameter("is_real_world", false);
+  }
+  bool is_real_world = node_->get_parameter("is_real_world").as_bool();
 
   if (!is_real_world) {
     // Override depth parameters with Habitat simulator settings
-    double habitat_max_depth, habitat_min_depth;
-    node_.param("/habitat/simulator/agents/main_agent/sim_sensors/depth_sensor/max_depth",
-        habitat_max_depth, -1.0);
-    node_.param("/habitat/simulator/agents/main_agent/sim_sensors/depth_sensor/min_depth",
-        habitat_min_depth, -1.0);
+    if (!node_->has_parameter("habitat.simulator.agents.main_agent.sim_sensors.depth_sensor.max_depth")) {
+      node_->declare_parameter("habitat.simulator.agents.main_agent.sim_sensors.depth_sensor.max_depth", -1.0);
+    }
+    if (!node_->has_parameter("habitat.simulator.agents.main_agent.sim_sensors.depth_sensor.min_depth")) {
+      node_->declare_parameter("habitat.simulator.agents.main_agent.sim_sensors.depth_sensor.min_depth", -1.0);
+    }
+    double habitat_max_depth = node_->get_parameter("habitat.simulator.agents.main_agent.sim_sensors.depth_sensor.max_depth").as_double();
+    double habitat_min_depth = node_->get_parameter("habitat.simulator.agents.main_agent.sim_sensors.depth_sensor.min_depth").as_double();
     if (habitat_max_depth != -1.0 && habitat_min_depth != -1.0) {
       depth_filter_maxdist_ = habitat_max_depth;
       depth_filter_mindist_ = habitat_min_depth;
-      ROS_WARN("Using habitat simulator params, set depth_filter_range = [%.2f, %.2f] m",
+      RCLCPP_WARN(node_->get_logger(),
+          "Using habitat simulator params, set depth_filter_range = [%.2f, %.2f] m",
           habitat_min_depth, habitat_max_depth);
     }
   }
@@ -71,56 +137,63 @@ void MapROS::init()
   esdf_need_update_ = false;
 
   // Setup periodic timers for map updates and visualization
-  esdf_timer_ = node_.createTimer(ros::Duration(0.1), &MapROS::updateESDFCallback, this);
-  vis_timer_ = node_.createTimer(ros::Duration(0.25), &MapROS::visCallback, this);
+  esdf_timer_ = node_->create_wall_timer(100ms, std::bind(&MapROS::updateESDFCallback, this));
+  vis_timer_ = node_->create_wall_timer(250ms, std::bind(&MapROS::visCallback, this));
 
   // Setup publishers for map visualization
-  occupied_pub_ = node_.advertise<sensor_msgs::PointCloud2>("/grid_map/occupied", 10);
-  unknown_pub_ = node_.advertise<sensor_msgs::PointCloud2>("/grid_map/unknown", 10);
-  free_pub_ = node_.advertise<sensor_msgs::PointCloud2>("/grid_map/free", 10);
-  occupied_inflate_pub_ =
-      node_.advertise<sensor_msgs::PointCloud2>("/grid_map/occupied_inflate", 10);
+  occupied_pub_ = node_->create_publisher<sensor_msgs::msg::PointCloud2>("/grid_map/occupied", 10);
+  unknown_pub_ = node_->create_publisher<sensor_msgs::msg::PointCloud2>("/grid_map/unknown", 10);
+  free_pub_ = node_->create_publisher<sensor_msgs::msg::PointCloud2>("/grid_map/free", 10);
+  occupied_inflate_pub_ = node_->create_publisher<sensor_msgs::msg::PointCloud2>(
+      "/grid_map/occupied_inflate", 10);
 
-  object_grid_pub_ = node_.advertise<sensor_msgs::PointCloud2>("/grid_map/occupancy_object", 10);
-  esdf_pub_ = node_.advertise<sensor_msgs::PointCloud2>("/grid_map/esdf", 10);
-  update_range_pub_ = node_.advertise<visualization_msgs::Marker>("/grid_map/update_range", 10);
-  depth_cloud_pub_ = node_.advertise<sensor_msgs::PointCloud2>("/grid_map/depth_cloud", 10);
-  filtered_depth_cloud_pub_ =
-      node_.advertise<sensor_msgs::PointCloud2>("/grid_map/filtered_depth_cloud", 10);
-  filtered_object_cloud_pub_ =
-      node_.advertise<sensor_msgs::PointCloud2>("/grid_map/filtered_object_cloud", 10);
-  all_object_cloud_pub_ =
-      node_.advertise<sensor_msgs::PointCloud2>("/grid_map/all_object_cloud", 10);
-  over_depth_object_cloud_pub_ =
-      node_.advertise<sensor_msgs::PointCloud2>("/grid_map/over_depth_object_cloud", 10);
-  value_map_pub_ = node_.advertise<sensor_msgs::PointCloud2>("/grid_map/value_map", 10);
-  confidence_map_pub_ = node_.advertise<sensor_msgs::PointCloud2>("/grid_map/confidence_map", 10);
+  object_grid_pub_ = node_->create_publisher<sensor_msgs::msg::PointCloud2>(
+      "/grid_map/occupancy_object", 10);
+  esdf_pub_ = node_->create_publisher<sensor_msgs::msg::PointCloud2>("/grid_map/esdf", 10);
+  update_range_pub_ = node_->create_publisher<visualization_msgs::msg::Marker>(
+      "/grid_map/update_range", 10);
+  depth_cloud_pub_ = node_->create_publisher<sensor_msgs::msg::PointCloud2>(
+      "/grid_map/depth_cloud", 10);
+  filtered_depth_cloud_pub_ = node_->create_publisher<sensor_msgs::msg::PointCloud2>(
+      "/grid_map/filtered_depth_cloud", 10);
+  filtered_object_cloud_pub_ = node_->create_publisher<sensor_msgs::msg::PointCloud2>(
+      "/grid_map/filtered_object_cloud", 10);
+  all_object_cloud_pub_ = node_->create_publisher<sensor_msgs::msg::PointCloud2>(
+      "/grid_map/all_object_cloud", 10);
+  over_depth_object_cloud_pub_ = node_->create_publisher<sensor_msgs::msg::PointCloud2>(
+      "/grid_map/over_depth_object_cloud", 10);
+  value_map_pub_ = node_->create_publisher<sensor_msgs::msg::PointCloud2>("/grid_map/value_map", 10);
+  confidence_map_pub_ = node_->create_publisher<sensor_msgs::msg::PointCloud2>(
+      "/grid_map/confidence_map", 10);
 
   // Setup subscribers for object detection and ITM scores
-  detected_object_cloud_sub_ = node_.subscribe(
-      "/detector/clouds_with_scores", 10, &MapROS::detectedObjectCloudCallback, this);
-  itm_score_sub_ = node_.subscribe("/blip2/cosine_score", 10, &MapROS::itmScoreCallback, this);
+  detected_object_cloud_sub_ = node_->create_subscription<plan_env::msg::MultipleMasksWithConfidence>(
+      "/detector/clouds_with_scores", 10,
+      std::bind(&MapROS::detectedObjectCloudCallback, this, std::placeholders::_1));
+  itm_score_sub_ = node_->create_subscription<std_msgs::msg::Float64>(
+      "/blip2/cosine_score", 10,
+      std::bind(&MapROS::itmScoreCallback, this, std::placeholders::_1));
 
   // Setup synchronized subscribers for depth image and pose data
-  depth_sub_.reset(
-      new message_filters::Subscriber<sensor_msgs::Image>(node_, "/map_ros/depth", 20));
-  pose_sub_.reset(new message_filters::Subscriber<nav_msgs::Odometry>(node_, "/map_ros/pose", 20));
+  rmw_qos_profile_t qos_profile = rmw_qos_profile_sensor_data;
+  depth_sub_ = std::make_shared<message_filters::Subscriber<sensor_msgs::msg::Image>>(
+      node_, "/map_ros/depth", qos_profile);
+  pose_sub_ = std::make_shared<message_filters::Subscriber<nav_msgs::msg::Odometry>>(
+      node_, "/map_ros/pose", qos_profile);
 
-  sync_image_pose_.reset(new message_filters::Synchronizer<MapROS::SyncPolicyImagePose>(
-      MapROS::SyncPolicyImagePose(20), *depth_sub_, *pose_sub_));
-  sync_image_pose_->setMaxIntervalDuration(ros::Duration(0.01));  // Set maximum temporal offset
-  sync_image_pose_->registerCallback(boost::bind(&MapROS::depthPoseCallback, this, _1, _2));
+  sync_image_pose_ = std::make_shared<message_filters::Synchronizer<SyncPolicyImagePose>>(
+      SyncPolicyImagePose(20), *depth_sub_, *pose_sub_);
+  sync_image_pose_->registerCallback(
+      std::bind(&MapROS::depthPoseCallback, this, std::placeholders::_1, std::placeholders::_2));
 
   // Initialize object tracking variables
   continue_over_depth_count_ = -1;
   itm_score_ = -1.0;
-  map_start_time_ = ros::Time::now();
+  map_start_time_ = node_->get_clock()->now();
 }
 
-void MapROS::visCallback(const ros::TimerEvent& e)
+void MapROS::visCallback()
 {
-  vis_timer_.stop();
-
   // Publish all visualization topics
   publishOccupied();
   publishInfOccupied();
@@ -131,25 +204,23 @@ void MapROS::visCallback(const ros::TimerEvent& e)
   // publishConfidenceMap();
   publishESDFMap();
   // publishUpdateRange();
-
-  vis_timer_.start();
 }
 
-void MapROS::itmScoreCallback(const std_msgs::Float64ConstPtr& msg)
+void MapROS::itmScoreCallback(const std_msgs::msg::Float64::SharedPtr msg)
 {
   itm_score_ = msg->data;
 }
 
-void MapROS::detectedObjectCloudCallback(const plan_env::MultipleMasksWithConfidenceConstPtr& msg)
+void MapROS::detectedObjectCloudCallback(const plan_env::msg::MultipleMasksWithConfidence::SharedPtr msg)
 {
   // Validate message structure consistency
   if (!(msg->confidence_scores.size() == msg->point_clouds.size() &&
           msg->confidence_scores.size() == msg->label_indices.size())) {
-    ROS_ERROR("[Bug] The MultipleMasksWithConfidence msg is wrong!!!");
+    RCLCPP_ERROR(node_->get_logger(), "[Bug] The MultipleMasksWithConfidence msg is wrong!!!");
     return;
   }
 
-  auto t1 = ros::Time::now();
+  auto t1 = node_->get_clock()->now();
 
   // Check camera orientation - only process when looking down (for better object detection)
   Eigen::Vector3d euler =
@@ -172,12 +243,12 @@ void MapROS::detectedObjectCloudCallback(const plan_env::MultipleMasksWithConfid
   vector<DetectedObject> detected_objects;
 
   // Process each detected object in the message
-  for (int i = 0; i < (int)msg->confidence_scores.size(); i++) {
+  for (size_t i = 0; i < msg->confidence_scores.size(); i++) {
     auto cloud = msg->point_clouds[i];
     auto confidence_score = msg->confidence_scores[i];
     auto label = msg->label_indices[i];
 
-    // Convert ROS message to PCL point cloud
+    // Convert ROS2 message to PCL point cloud
     PointCloud3D::Ptr single_object_cloud(new PointCloud3D());
     pcl::fromROSMsg(cloud, *single_object_cloud);
     *all_object_cloud += *single_object_cloud;
@@ -205,7 +276,7 @@ void MapROS::detectedObjectCloudCallback(const plan_env::MultipleMasksWithConfid
     // Skip objects that are entirely beyond valid depth range
     if (single_object_cloud->points.empty()) {
       if (!over_depth_object_cloud->points.empty()) {
-        ROS_ERROR("Have all over depth object cloud!!!!");
+        RCLCPP_ERROR(node_->get_logger(), "Have all over depth object cloud!!!!");
         *map_->object_map2d_->over_depth_object_cloud_ += *over_depth_object_cloud;
       }
       continue;
@@ -214,12 +285,12 @@ void MapROS::detectedObjectCloudCallback(const plan_env::MultipleMasksWithConfid
     // Apply DBSCAN clustering to remove noise and outliers
     single_object_cloud = dbscan(single_object_cloud, 0.12f, 10);
     if (single_object_cloud == nullptr) {
-      ROS_ERROR("After DBSCAN, no point cloud cluster!!");
+      RCLCPP_ERROR(node_->get_logger(), "After DBSCAN, no point cloud cluster!!");
       continue;
     }
 
     if (single_object_cloud->points.empty()) {
-      ROS_ERROR("Single object point cloud is empty!!!");
+      RCLCPP_ERROR(node_->get_logger(), "Single object point cloud is empty!!!");
       continue;
     }
 
@@ -254,36 +325,30 @@ void MapROS::detectedObjectCloudCallback(const plan_env::MultipleMasksWithConfid
   vector<int> detected_object_cluster_ids;
   map_->inputObjectCloud2D(detected_objects, detected_object_cluster_ids);
 
-  // Optional: Log detected object IDs for debugging
-  // for (auto object_id : detected_object_cluster_ids)
-  //   ROS_INFO("Detected object id is %d", object_id);
-
   // Extract observation data from depth sensor for objects not detected by vision
   getObservationObjectsCloud(detected_object_cluster_ids);
 
-  double object_map_process_time = (ros::Time::now() - t1).toSec();
-  ROS_INFO_THROTTLE(
-      10.0, "[Calculating Time] Object Map process time = %.3f s", object_map_process_time);
+  double object_map_process_time = (node_->get_clock()->now() - t1).seconds();
+  RCLCPP_INFO_THROTTLE(node_->get_logger(), *node_->get_clock(), 10000,
+      "[Calculating Time] Object Map process time = %.3f s", object_map_process_time);
 }
 
-void MapROS::updateESDFCallback(const ros::TimerEvent& /*event*/)
+void MapROS::updateESDFCallback()
 {
   if (!esdf_need_update_)
     return;
 
-  esdf_timer_.stop();
-
-  auto t1 = ros::Time::now();
+  auto t1 = node_->get_clock()->now();
   map_->updateESDFMap();
   esdf_need_update_ = false;
-  double esdf_time = (ros::Time::now() - t1).toSec();
-  ROS_INFO_THROTTLE(50.0, "[Calculating Time] ESDF Map process time = %.3f s", esdf_time);
-
-  esdf_timer_.start();
+  double esdf_time = (node_->get_clock()->now() - t1).seconds();
+  RCLCPP_INFO_THROTTLE(node_->get_logger(), *node_->get_clock(), 50000,
+      "[Calculating Time] ESDF Map process time = %.3f s", esdf_time);
 }
 
 void MapROS::depthPoseCallback(
-    const sensor_msgs::ImageConstPtr& img, const nav_msgs::OdometryConstPtr& pose)
+    const sensor_msgs::msg::Image::ConstSharedPtr& img,
+    const nav_msgs::msg::Odometry::ConstSharedPtr& pose)
 {
   // Extract camera pose from odometry message
   camera_pos_(0) = pose->pose.pose.position.x;
@@ -310,7 +375,7 @@ void MapROS::depthPoseCallback(
     (cv_ptr->image).convertTo(cv_ptr->image, CV_16UC1, 255.0);
   cv_ptr->image.copyTo(*depth_image_);
 
-  auto t1 = ros::Time::now();
+  auto t1 = node_->get_clock()->now();
 
   // Process depth image into 3D point cloud and filter to 2D representation
   processDepthImage();
@@ -321,15 +386,17 @@ void MapROS::depthPoseCallback(
   // Dilate free_grids to ensure more complete coverage
   dilateGrids(free_grids, 1);
   map_->inputDepthCloud2D(filtered_depth_cloud2d_, camera_pos_, free_grids);
-  double process_time = (ros::Time::now() - t1).toSec();
-  ROS_INFO_THROTTLE(50.0, "[Calculating Time] Grid Map process time = %.3f s", process_time);
+  double process_time = (node_->get_clock()->now() - t1).seconds();
+  RCLCPP_INFO_THROTTLE(node_->get_logger(), *node_->get_clock(), 50000,
+      "[Calculating Time] Grid Map process time = %.3f s", process_time);
 
-  t1 = ros::Time::now();
+  t1 = node_->get_clock()->now();
   // Update semantic value map if ITM score is available
   if (itm_score_ != -1.0)
     map_->value_map_->updateValueMap(camera_pos, camera_yaw, free_grids, itm_score_);
-  double value_map_time = (ros::Time::now() - t1).toSec();
-  ROS_INFO_THROTTLE(50.0, "[Calculating Time] Value Map process time = %.3f s", value_map_time);
+  double value_map_time = (node_->get_clock()->now() - t1).seconds();
+  RCLCPP_INFO_THROTTLE(node_->get_logger(), *node_->get_clock(), 50000,
+      "[Calculating Time] Value Map process time = %.3f s", value_map_time);
 
   // Trigger ESDF update if local map has been updated
   if (local_updated_) {
@@ -382,15 +449,6 @@ void MapROS::processDepthImage()
   publishPointCloud(depth_cloud_pub_, depth_cloud_);
 }
 
-/**
- * @brief Extract undetected objects from depth observation data
- *
- * Identifies objects that appear in depth sensor data but weren't detected by
- * the vision system. Uses bounding box filtering to separate already detected
- * objects from potential undetected ones. Assigns zero confidence to undetected objects.
- *
- * @param filter_object_ids List of already detected object cluster IDs to filter out
- */
 void MapROS::getObservationObjectsCloud(const std::vector<int>& filter_object_ids)
 {
   // Downsample depth cloud for efficient processing
@@ -401,7 +459,7 @@ void MapROS::getObservationObjectsCloud(const std::vector<int>& filter_object_id
   voxel_filter.filter(*filtered_depth_cloud);
 
   // Get object bounding boxes and create filter flags
-  vector<Vector3d> bmins, bmaxs;
+  vector<Eigen::Vector3d> bmins, bmaxs;
   map_->object_map2d_->getObjectBoxes(bmins, bmaxs);
   vector<char> filter_object_flag(bmins.size(), 0);
   for (auto filter_object_id : filter_object_ids) filter_object_flag[filter_object_id] = 1;
@@ -411,7 +469,7 @@ void MapROS::getObservationObjectsCloud(const std::vector<int>& filter_object_id
   crop_box_filter.setInputCloud(filtered_depth_cloud);
   vector<pcl::shared_ptr<PointCloud3D>> observation_clouds;
 
-  for (int i = 0; i < (int)bmins.size(); i++) {
+  for (size_t i = 0; i < bmins.size(); i++) {
     PointCloud3D::Ptr cloud_filtered(new PointCloud3D);
     if (filter_object_flag[i])
       observation_clouds.push_back(cloud_filtered);  // Empty cloud for detected objects
@@ -431,16 +489,13 @@ void MapROS::getObservationObjectsCloud(const std::vector<int>& filter_object_id
   map_->object_map2d_->inputObservationObjectsCloud(observation_clouds, max(0.0, itm_score_));
 }
 
-/**
- * @brief Filter and process 3D point cloud to 2D occupancy grid
- */
 void MapROS::filterPointCloudToXY()
 {
   // Default ground height assumption (currently set to 0)
   double cur_floor_height = 0.0;
   double virtual_ground = virtual_ground_height_;
 
-  auto t1 = ros::Time::now();
+  auto t1 = node_->get_clock()->now();
   PointCloud3D::Ptr filtered_cloud_3d(new PointCloud3D());
   PointCloud3D::Ptr down_depth_cloud_3d(new PointCloud3D());
   PointCloud3D::Ptr under_ground_cloud_3d(new PointCloud3D());
@@ -455,7 +510,7 @@ void MapROS::filterPointCloudToXY()
   filtered_depth_cloud2d_->clear();
 
   // Separate points by height categories
-  for (int i = 0; i < (int)down_depth_cloud_3d->points.size(); i++) {
+  for (size_t i = 0; i < down_depth_cloud_3d->points.size(); i++) {
     Point3D pt;
     pt.x = down_depth_cloud_3d->points[i].x;
     pt.y = down_depth_cloud_3d->points[i].y;
@@ -523,9 +578,11 @@ void MapROS::filterPointCloudToXY()
     map_->inputVirtualGround(under_ground_cloud_2d);
   }
 
-  double filter_time = (ros::Time::now() - t1).toSec();
-  ROS_WARN_COND(filter_time > 0.1, "Filter point cloud time maybe a little long = %.3f ms",
-      filter_time * 1000);
+  double filter_time = (node_->get_clock()->now() - t1).seconds();
+  if (filter_time > 0.1) {
+    RCLCPP_WARN(node_->get_logger(),
+        "Filter point cloud time maybe a little long = %.3f ms", filter_time * 1000);
+  }
 }
 
 bool MapROS::interpolateLineAtZ(
@@ -545,23 +602,10 @@ bool MapROS::interpolateLineAtZ(
   return true;
 }
 
-/**
- * @brief DBSCAN clustering algorithm to extract largest point cloud cluster
- *
- * Applies Density-Based Spatial Clustering of Applications with Noise (DBSCAN)
- * to identify and return the largest cluster from a point cloud. This is used
- * to filter noise and extract the main object point cloud, assuming each object
- * consists of a single dominant cluster.
- *
- * @param cloud Input point cloud to cluster
- * @param eps Maximum distance between points in the same cluster (neighborhood radius)
- * @param minPts Minimum number of points required to form a dense region (cluster)
- * @return Pointer to largest cluster point cloud, or nullptr if clustering fails
- */
 PointCloud3D::Ptr MapROS::dbscan(const PointCloud3D::Ptr& cloud, double eps, int minPts)
 {
   if (cloud->empty()) {
-    ROS_ERROR("[DBSCAN] Input cloud is empty!");
+    RCLCPP_ERROR(node_->get_logger(), "[DBSCAN] Input cloud is empty!");
     return nullptr;
   }
 
@@ -581,7 +625,7 @@ PointCloud3D::Ptr MapROS::dbscan(const PointCloud3D::Ptr& cloud, double eps, int
 
   // Return null if no clusters found
   if (cluster_indices.empty()) {
-    ROS_WARN("[DBSCAN] No clusters found!");
+    RCLCPP_WARN(node_->get_logger(), "[DBSCAN] No clusters found!");
     return nullptr;
   }
 
@@ -601,4 +645,5 @@ PointCloud3D::Ptr MapROS::dbscan(const PointCloud3D::Ptr& cloud, double eps, int
     largest_cluster->points.push_back(cloud->points[idx]);
   return largest_cluster;
 }
+
 }  // namespace apexnav_planner

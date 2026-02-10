@@ -1,5 +1,5 @@
 Panels:
-  - Class: rviz/Displays
+  - Class: rviz_common/Displays
     Help Height: 0
     Name: Displays
     Property Tree Widget:
@@ -12,21 +12,21 @@ Panels:
         - /Mapping_2D1/local1
       Splitter Ratio: 0.596069872379303
     Tree Height: 1263
-  - Class: rviz/Selection
+  - Class: rviz_common/Selection
     Name: Selection
-  - Class: rviz/Tool Properties
+  - Class: rviz_common/Tool Properties
     Expanded:
       - /2D Pose Estimate1
       - /2D Nav Goal1
       - /Publish Point1
     Name: Tool Properties
     Splitter Ratio: 0.5886790156364441
-  - Class: rviz/Views
+  - Class: rviz_common/Views
     Expanded:
       - /Current View1
     Name: Views
     Splitter Ratio: 0.5
-  - Class: rviz/Time
+  - Class: rviz_common/Time
     Name: Time
     SyncMode: 0
     SyncSource: occupy
@@ -37,10 +37,10 @@ Toolbars:
 Visualization Manager:
   Class: ""
   Displays:
-    - Class: rviz/Group
+    - Class: rviz_common/Group
       Displays:
         - Angle Tolerance: 0.10000000149011612
-          Class: rviz/Odometry
+          Class: rviz_default_plugins/Odometry
           Covariance:
             Orientation:
               Alpha: 0.5
@@ -56,26 +56,31 @@ Visualization Manager:
               Scale: 1
               Value: true
             Value: true
-          Enabled: false
+          Enabled: true
           Keep: 1
           Name: Odometry
           Position Tolerance: 0.10000000149011612
           Queue Size: 10
           Shape:
             Alpha: 1
-            Axes Length: 0.30000001192092896
-            Axes Radius: 0.15000000596046448
+            Axes Length: 1
+            Axes Radius: 0.30000001192092896
             Color: 255; 25; 0
-            Head Length: 0.30000001192092896
-            Head Radius: 0.10000000149011612
-            Shaft Length: 1
-            Shaft Radius: 0.05000000074505806
-            Value: Axes
-          Topic: /habitat/odom
-          Unreliable: false
-          Value: false
+            Head Length: 0.5
+            Head Radius: 0.20000000298023224
+            Shaft Length: 1.5
+            Shaft Radius: 0.10000000149011612
+            Value: Arrow
+          Topic:
+            Depth: 5
+            Durability Policy: Volatile
+            Filter size: 10
+            History Policy: Keep Last
+            Reliability Policy: Reliable
+            Value: /habitat/odom
+          Value: true
         - Angle Tolerance: 0.10000000149011612
-          Class: rviz/Odometry
+          Class: rviz_default_plugins/Odometry
           Covariance:
             Orientation:
               Alpha: 0.5
@@ -106,23 +111,38 @@ Visualization Manager:
             Shaft Length: 1
             Shaft Radius: 0.05000000074505806
             Value: Axes
-          Topic: /habitat/sensor_pose
-          Unreliable: false
+          Topic:
+            Depth: 5
+            Durability Policy: Volatile
+            Filter size: 10
+            History Policy: Keep Last
+            Reliability Policy: Best Effort
+            Value: /habitat/sensor_pose
           Value: false
-        - Class: rviz/Marker
+        - Class: rviz_default_plugins/Marker
           Enabled: true
-          Marker Topic: /robot
+          Topic:
+            Depth: 5
+            Durability Policy: Volatile
+            History Policy: Keep Last
+            Reliability Policy: Reliable
+            Value: /robot
           Name: robot
           Namespaces:
             robot_direction: true
             robot_position: true
           Queue Size: 100
           Value: true
-        - Class: rviz/Group
+        - Class: rviz_common/Group
           Displays:
-            - Class: rviz/Image
+            - Class: rviz_default_plugins/Image
               Enabled: true
-              Image Topic: /habitat/camera_depth
+              Topic:
+                Depth: 5
+                Durability Policy: Volatile
+                History Policy: Keep Last
+                Reliability Policy: Best Effort
+                Value: /habitat/camera_depth
               Max Value: 1
               Median window: 5
               Min Value: 0
@@ -130,11 +150,15 @@ Visualization Manager:
               Normalize Range: true
               Queue Size: 2
               Transport Hint: raw
-              Unreliable: false
               Value: true
-            - Class: rviz/Image
+            - Class: rviz_default_plugins/Image
               Enabled: true
-              Image Topic: /habitat/camera_rgb
+              Topic:
+                Depth: 5
+                Durability Policy: Volatile
+                History Policy: Keep Last
+                Reliability Policy: Best Effort
+                Value: /habitat/camera_rgb
               Max Value: 1
               Median window: 5
               Min Value: 0
@@ -142,17 +166,21 @@ Visualization Manager:
               Normalize Range: true
               Queue Size: 2
               Transport Hint: raw
-              Unreliable: false
               Value: true
           Enabled: true
           Name: imgs
       Enabled: true
       Name: Simulation
-    - Class: rviz/Group
+    - Class: rviz_common/Group
       Displays:
-        - Class: rviz/Marker
+        - Class: rviz_default_plugins/Marker
           Enabled: true
-          Marker Topic: /planning_vis/frontier
+          Topic:
+            Depth: 5
+            Durability Policy: Volatile
+            History Policy: Keep Last
+            Reliability Policy: Reliable
+            Value: /planning_vis/frontier
           Name: frontier
           Namespaces:
             dormant_frontier: true
@@ -160,9 +188,14 @@ Visualization Manager:
             object: true
           Queue Size: 10000
           Value: true
-        - Class: rviz/Marker
+        - Class: rviz_default_plugins/Marker
           Enabled: true
-          Marker Topic: /planning_vis/viewpoints
+          Topic:
+            Depth: 5
+            Durability Policy: Volatile
+            History Policy: Keep Last
+            Reliability Policy: Reliable
+            Value: /planning_vis/viewpoints
           Name: path
           Namespaces:
             local_point: true
@@ -173,9 +206,9 @@ Visualization Manager:
           Value: true
       Enabled: true
       Name: Exploration
-    - Class: rviz/Group
+    - Class: rviz_common/Group
       Displays:
-        - Class: rviz/Group
+        - Class: rviz_common/Group
           Displays:
             - Alpha: 1
               Autocompute Intensity Bounds: true
@@ -185,7 +218,7 @@ Visualization Manager:
                 Value: true
               Axis: Z
               Channel Name: intensity
-              Class: rviz/PointCloud2
+              Class: rviz_default_plugins/PointCloud2
               Color: 85; 87; 83
               Color Transformer: FlatColor
               Decay Time: 0
@@ -200,8 +233,13 @@ Visualization Manager:
               Size (Pixels): 3
               Size (m): 0.05999999865889549
               Style: Flat Squares
-              Topic: /grid_map/occupied
-              Unreliable: false
+              Topic:
+                Depth: 5
+                Durability Policy: Volatile
+                Filter size: 10
+                History Policy: Keep Last
+                Reliability Policy: Reliable
+                Value: /grid_map/occupied
               Use Fixed Frame: true
               Use rainbow: true
               Value: true
@@ -213,7 +251,7 @@ Visualization Manager:
                 Value: false
               Axis: Z
               Channel Name: intensity
-              Class: rviz/PointCloud2
+              Class: rviz_default_plugins/PointCloud2
               Color: 136; 138; 133
               Color Transformer: FlatColor
               Decay Time: 0
@@ -228,8 +266,13 @@ Visualization Manager:
               Size (Pixels): 3
               Size (m): 0.05999999865889549
               Style: Flat Squares
-              Topic: /grid_map/occupied_inflate
-              Unreliable: false
+              Topic:
+                Depth: 5
+                Durability Policy: Volatile
+                Filter size: 10
+                History Policy: Keep Last
+                Reliability Policy: Reliable
+                Value: /grid_map/occupied_inflate
               Use Fixed Frame: true
               Use rainbow: true
               Value: true
@@ -241,7 +284,7 @@ Visualization Manager:
                 Value: true
               Axis: Z
               Channel Name: intensity
-              Class: rviz/PointCloud2
+              Class: rviz_default_plugins/PointCloud2
               Color: 211; 215; 207
               Color Transformer: FlatColor
               Decay Time: 0
@@ -256,8 +299,13 @@ Visualization Manager:
               Size (Pixels): 3
               Size (m): 0.05999999865889549
               Style: Flat Squares
-              Topic: /grid_map/unknown
-              Unreliable: false
+              Topic:
+                Depth: 5
+                Durability Policy: Volatile
+                Filter size: 10
+                History Policy: Keep Last
+                Reliability Policy: Reliable
+                Value: /grid_map/unknown
               Use Fixed Frame: true
               Use rainbow: true
               Value: false
@@ -269,7 +317,7 @@ Visualization Manager:
                 Value: true
               Axis: Z
               Channel Name: intensity
-              Class: rviz/PointCloud2
+              Class: rviz_default_plugins/PointCloud2
               Color: 176; 220; 245
               Color Transformer: FlatColor
               Decay Time: 0
@@ -284,14 +332,19 @@ Visualization Manager:
               Size (Pixels): 3
               Size (m): 0.05999999865889549
               Style: Flat Squares
-              Topic: /grid_map/free
-              Unreliable: false
+              Topic:
+                Depth: 5
+                Durability Policy: Volatile
+                Filter size: 10
+                History Policy: Keep Last
+                Reliability Policy: Reliable
+                Value: /grid_map/free
               Use Fixed Frame: true
               Use rainbow: true
               Value: false
           Enabled: true
           Name: grid_map
-        - Class: rviz/Group
+        - Class: rviz_common/Group
           Displays:
             - Alpha: 0.699999988079071
               Autocompute Intensity Bounds: true
@@ -301,7 +354,7 @@ Visualization Manager:
                 Value: true
               Axis: Z
               Channel Name: intensity
-              Class: rviz/PointCloud2
+              Class: rviz_default_plugins/PointCloud2
               Color: 0; 0; 0
               Color Transformer: Intensity
               Decay Time: 0
@@ -316,14 +369,24 @@ Visualization Manager:
               Size (Pixels): 3
               Size (m): 0.05999999865889549
               Style: Flat Squares
-              Topic: /grid_map/esdf
-              Unreliable: false
+              Topic:
+                Depth: 5
+                Durability Policy: Volatile
+                Filter size: 10
+                History Policy: Keep Last
+                Reliability Policy: Reliable
+                Value: /grid_map/esdf
               Use Fixed Frame: true
               Use rainbow: true
               Value: false
-            - Class: rviz/Marker
+            - Class: rviz_default_plugins/Marker
               Enabled: false
-              Marker Topic: /grid_map/update_range
+              Topic:
+                Depth: 5
+                Durability Policy: Volatile
+                History Policy: Keep Last
+                Reliability Policy: Reliable
+                Value: /grid_map/update_range
               Name: local_range
               Namespaces:
                 {}
@@ -331,7 +394,7 @@ Visualization Manager:
               Value: false
           Enabled: true
           Name: local
-        - Class: rviz/Group
+        - Class: rviz_common/Group
           Displays:
             - Alpha: 1
               Autocompute Intensity Bounds: true
@@ -341,7 +404,7 @@ Visualization Manager:
                 Value: true
               Axis: Z
               Channel Name: intensity
-              Class: rviz/PointCloud2
+              Class: rviz_default_plugins/PointCloud2
               Color: 32; 74; 135
               Color Transformer: FlatColor
               Decay Time: 0
@@ -356,8 +419,13 @@ Visualization Manager:
               Size (Pixels): 3
               Size (m): 0.009999999776482582
               Style: Flat Squares
-              Topic: /grid_map/depth_cloud
-              Unreliable: false
+              Topic:
+                Depth: 5
+                Durability Policy: Volatile
+                Filter size: 10
+                History Policy: Keep Last
+                Reliability Policy: Reliable
+                Value: /grid_map/depth_cloud
               Use Fixed Frame: true
               Use rainbow: true
               Value: true
@@ -369,7 +437,7 @@ Visualization Manager:
                 Value: true
               Axis: Z
               Channel Name: intensity
-              Class: rviz/PointCloud2
+              Class: rviz_default_plugins/PointCloud2
               Color: 115; 210; 22
               Color Transformer: FlatColor
               Decay Time: 0
@@ -384,14 +452,19 @@ Visualization Manager:
               Size (Pixels): 3
               Size (m): 0.019999999552965164
               Style: Flat Squares
-              Topic: /grid_map/filtered_depth_cloud
-              Unreliable: false
+              Topic:
+                Depth: 5
+                Durability Policy: Volatile
+                Filter size: 10
+                History Policy: Keep Last
+                Reliability Policy: Reliable
+                Value: /grid_map/filtered_depth_cloud
               Use Fixed Frame: true
               Use rainbow: true
               Value: false
           Enabled: false
           Name: depth_cloud
-        - Class: rviz/Group
+        - Class: rviz_common/Group
           Displays:
             - Alpha: 1
               Autocompute Intensity Bounds: true
@@ -401,7 +474,7 @@ Visualization Manager:
                 Value: true
               Axis: Z
               Channel Name: intensity
-              Class: rviz/PointCloud2
+              Class: rviz_default_plugins/PointCloud2
               Color: 245; 121; 0
               Color Transformer: FlatColor
               Decay Time: 0
@@ -416,8 +489,13 @@ Visualization Manager:
               Size (Pixels): 3
               Size (m): 0.10000000149011612
               Style: Flat Squares
-              Topic: /grid_map/occupancy_object
-              Unreliable: false
+              Topic:
+                Depth: 5
+                Durability Policy: Volatile
+                Filter size: 10
+                History Policy: Keep Last
+                Reliability Policy: Reliable
+                Value: /grid_map/occupancy_object
               Use Fixed Frame: true
               Use rainbow: true
               Value: false
@@ -429,7 +507,7 @@ Visualization Manager:
                 Value: true
               Axis: Z
               Channel Name: intensity
-              Class: rviz/PointCloud2
+              Class: rviz_default_plugins/PointCloud2
               Color: 164; 0; 0
               Color Transformer: FlatColor
               Decay Time: 0
@@ -444,8 +522,13 @@ Visualization Manager:
               Size (Pixels): 3
               Size (m): 0.009999999776482582
               Style: Flat Squares
-              Topic: /grid_map/all_object_cloud
-              Unreliable: false
+              Topic:
+                Depth: 5
+                Durability Policy: Volatile
+                Filter size: 10
+                History Policy: Keep Last
+                Reliability Policy: Reliable
+                Value: /grid_map/all_object_cloud
               Use Fixed Frame: true
               Use rainbow: true
               Value: false
@@ -457,7 +540,7 @@ Visualization Manager:
                 Value: true
               Axis: Z
               Channel Name: intensity
-              Class: rviz/PointCloud2
+              Class: rviz_default_plugins/PointCloud2
               Color: 92; 53; 102
               Color Transformer: FlatColor
               Decay Time: 0
@@ -472,8 +555,13 @@ Visualization Manager:
               Size (Pixels): 3
               Size (m): 0.029999999329447746
               Style: Flat Squares
-              Topic: /grid_map/filtered_object_cloud
-              Unreliable: false
+              Topic:
+                Depth: 5
+                Durability Policy: Volatile
+                Filter size: 10
+                History Policy: Keep Last
+                Reliability Policy: Reliable
+                Value: /grid_map/filtered_object_cloud
               Use Fixed Frame: true
               Use rainbow: true
               Value: true
@@ -485,7 +573,7 @@ Visualization Manager:
                 Value: true
               Axis: Z
               Channel Name: intensity
-              Class: rviz/PointCloud2
+              Class: rviz_default_plugins/PointCloud2
               Color: 206; 92; 0
               Color Transformer: FlatColor
               Decay Time: 0
@@ -500,8 +588,13 @@ Visualization Manager:
               Size (Pixels): 3
               Size (m): 0.029999999329447746
               Style: Flat Squares
-              Topic: /grid_map/over_depth_object_cloud
-              Unreliable: false
+              Topic:
+                Depth: 5
+                Durability Policy: Volatile
+                Filter size: 10
+                History Policy: Keep Last
+                Reliability Policy: Reliable
+                Value: /grid_map/over_depth_object_cloud
               Use Fixed Frame: true
               Use rainbow: true
               Value: true
@@ -515,7 +608,7 @@ Visualization Manager:
             Value: true
           Axis: Z
           Channel Name: intensity
-          Class: rviz/PointCloud2
+          Class: rviz_default_plugins/PointCloud2
           Color: 211; 215; 207
           Color Transformer: Intensity
           Decay Time: 0
@@ -532,8 +625,13 @@ Visualization Manager:
           Size (Pixels): 3
           Size (m): 0.05999999865889549
           Style: Flat Squares
-          Topic: /grid_map/value_map
-          Unreliable: false
+          Topic:
+            Depth: 5
+            Durability Policy: Volatile
+            Filter size: 10
+            History Policy: Keep Last
+            Reliability Policy: Reliable
+            Value: /grid_map/value_map
           Use Fixed Frame: true
           Use rainbow: false
           Value: true
@@ -545,7 +643,7 @@ Visualization Manager:
             Value: true
           Axis: Z
           Channel Name: intensity
-          Class: rviz/PointCloud2
+          Class: rviz_default_plugins/PointCloud2
           Color: 211; 215; 207
           Color Transformer: Intensity
           Decay Time: 0
@@ -560,8 +658,13 @@ Visualization Manager:
           Size (Pixels): 3
           Size (m): 0.05999999865889549
           Style: Flat Squares
-          Topic: /grid_map/confidence_map
-          Unreliable: false
+          Topic:
+            Depth: 5
+            Durability Policy: Volatile
+            Filter size: 10
+            History Policy: Keep Last
+            Reliability Policy: Reliable
+            Value: /grid_map/confidence_map
           Use Fixed Frame: true
           Use rainbow: false
           Value: false
@@ -575,7 +678,7 @@ Visualization Manager:
         Value: true
       Axis: Z
       Channel Name: intensity
-      Class: rviz/PointCloud2
+      Class: rviz_default_plugins/PointCloud2
       Color: 114; 159; 207
       Color Transformer: RGB8
       Decay Time: 0
@@ -590,8 +693,13 @@ Visualization Manager:
       Size (Pixels): 3
       Size (m): 0.09000000357627869
       Style: Spheres
-      Topic: /object/clouds
-      Unreliable: false
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        Filter size: 10
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /object/clouds
       Use Fixed Frame: true
       Use rainbow: true
       Value: false
@@ -603,25 +711,25 @@ Visualization Manager:
     Frame Rate: 30
   Name: root
   Tools:
-    - Class: rviz/Interact
+    - Class: rviz_default_plugins/Interact
       Hide Inactive Objects: true
-    - Class: rviz/Select
-    - Class: rviz/FocusCamera
-    - Class: rviz/Measure
-    - Class: rviz/SetInitialPose
+    - Class: rviz_default_plugins/Select
+    - Class: rviz_default_plugins/FocusCamera
+    - Class: rviz_default_plugins/Measure
+    - Class: rviz_default_plugins/SetInitialPose
       Theta std deviation: 0.2617993950843811
       Topic: /initialpose
       X std deviation: 0.5
       Y std deviation: 0.5
-    - Class: rviz/SetGoal
+    - Class: rviz_default_plugins/SetGoal
       Topic: /move_base_simple/goal
-    - Class: rviz/PublishPoint
+    - Class: rviz_default_plugins/PublishPoint
       Single click: true
       Topic: /clicked_point
   Value: true
   Views:
     Current:
-      Class: rviz/ThirdPersonFollower
+      Class: rviz_default_plugins/ThirdPersonFollower
       Distance: 54.37068176269531
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
@@ -642,7 +750,7 @@ Visualization Manager:
       Target Frame: <Fixed Frame>
       Yaw: 3.2953670024871826
     Saved:
-      - Class: rviz/ThirdPersonFollower
+      - Class: rviz_default_plugins/ThirdPersonFollower
         Distance: 40.93450164794922
         Enable Stereo Rendering:
           Stereo Eye Separation: 0.05999999865889549
@@ -663,7 +771,7 @@ Visualization Manager:
         Target Frame: <Fixed Frame>
         Yaw: 3.139589309692383
       - Angle: -1.5749993324279785
-        Class: rviz/TopDownOrtho
+        Class: rviz_default_plugins/TopDownOrtho
         Enable Stereo Rendering:
           Stereo Eye Separation: 0.05999999865889549
           Stereo Focal Distance: 1

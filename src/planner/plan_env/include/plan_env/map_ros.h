@@ -1,28 +1,29 @@
 #ifndef _MAP_ROS_H
 #define _MAP_ROS_H
 
-// ROS core and message handling
-#include <ros/ros.h>
+// ROS2 core and message handling
+#include <rclcpp/rclcpp.hpp>
 #include <message_filters/subscriber.h>
 #include <message_filters/sync_policies/approximate_time.h>
 #include <message_filters/sync_policies/exact_time.h>
-#include <message_filters/time_synchronizer.h>
+#include <message_filters/synchronizer.h>
 
 // Custom messages and mapping components
-#include <plan_env/MultipleMasksWithConfidence.h>
+#include <plan_env/msg/multiple_masks_with_confidence.hpp>
 #include <plan_env/sdf_map2d.h>
 #include <plan_env/object_map2d.h>
 #include <plan_env/value_map2d.h>
 
 // OpenCV for image processing
-#include <cv_bridge/cv_bridge.h>
+#include <cv_bridge/cv_bridge.hpp>
 
-// Standard ROS messages
-#include <geometry_msgs/PoseStamped.h>
-#include <sensor_msgs/PointCloud2.h>
-#include <nav_msgs/Odometry.h>
-#include <visualization_msgs/Marker.h>
-#include <std_msgs/Float64.h>
+// Standard ROS2 messages
+#include <geometry_msgs/msg/pose_stamped.hpp>
+#include <sensor_msgs/msg/point_cloud2.hpp>
+#include <sensor_msgs/msg/image.hpp>
+#include <nav_msgs/msg/odometry.hpp>
+#include <visualization_msgs/msg/marker.hpp>
+#include <std_msgs/msg/float64.hpp>
 
 // PCL for point cloud processing
 #include <pcl/filters/voxel_grid.h>
@@ -58,16 +59,18 @@ public:
   ~MapROS() = default;
   // Core interface functions
   void setMap(SDFMap2D* map);
+  void setNode(rclcpp::Node::SharedPtr node);
   void init();
 
 private:
-  // ROS callback functions
+  // ROS2 callback functions
   void depthPoseCallback(  ///< Process synchronized depth image and pose data
-      const sensor_msgs::ImageConstPtr& img, const nav_msgs::OdometryConstPtr& pose);
-  void updateESDFCallback(const ros::TimerEvent& /*event*/);
-  void detectedObjectCloudCallback(const plan_env::MultipleMasksWithConfidenceConstPtr& msg);
-  void itmScoreCallback(const std_msgs::Float64ConstPtr& msg);
-  void visCallback(const ros::TimerEvent& /*event*/);
+      const sensor_msgs::msg::Image::ConstSharedPtr& img,
+      const nav_msgs::msg::Odometry::ConstSharedPtr& pose);
+  void updateESDFCallback();
+  void detectedObjectCloudCallback(const plan_env::msg::MultipleMasksWithConfidence::SharedPtr msg);
+  void itmScoreCallback(const std_msgs::msg::Float64::SharedPtr msg);
+  void visCallback();
 
   // Visualization publishing functions
   void publishOccupied();
@@ -80,7 +83,9 @@ private:
   void publishValueMap();
   void publishConfidenceMap();
   void publishUpdateRange();
-  void publishPointCloud(const ros::Publisher& pub, const PointCloud3D::Ptr& point_cloud);
+  void publishPointCloud(
+      const rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr& pub,
+      const PointCloud3D::Ptr& point_cloud);
 
   // Data processing functions
   void processDepthImage();     ///< Process raw depth image into 3D point cloud
@@ -98,27 +103,39 @@ private:
   SDFMap2D* map_;
 
   // Message synchronization types
-  typedef message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, nav_msgs::Odometry>
-      SyncPolicyImagePose;  ///< Policy for synchronizing depth images with pose data
-  typedef shared_ptr<message_filters::Synchronizer<SyncPolicyImagePose>> SynchronizerImagePose;
+  using SyncPolicyImagePose = message_filters::sync_policies::ApproximateTime<
+      sensor_msgs::msg::Image, nav_msgs::msg::Odometry>;
+  using SynchronizerImagePose = std::shared_ptr<message_filters::Synchronizer<SyncPolicyImagePose>>;
 
-  // ROS communication interfaces
-  ros::NodeHandle node_;
-  shared_ptr<message_filters::Subscriber<sensor_msgs::Image>> depth_sub_;
-  shared_ptr<message_filters::Subscriber<nav_msgs::Odometry>> pose_sub_;
+  // ROS2 communication interfaces
+  rclcpp::Node::SharedPtr node_;
+  std::shared_ptr<message_filters::Subscriber<sensor_msgs::msg::Image>> depth_sub_;
+  std::shared_ptr<message_filters::Subscriber<nav_msgs::msg::Odometry>> pose_sub_;
   SynchronizerImagePose sync_image_pose_;  ///< Synchronizer for depth and pose messages
 
-  // ROS publishers for map visualization
-  ros::Publisher occupied_pub_, occupied_inflate_pub_, unknown_pub_, free_pub_, esdf_pub_,
-      object_grid_pub_, update_range_pub_, depth_cloud_pub_, filtered_depth_cloud_pub_,
-      filtered_object_cloud_pub_, all_object_cloud_pub_, over_depth_object_cloud_pub_,
-      value_map_pub_, confidence_map_pub_;
+  // ROS2 publishers for map visualization
+  rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr occupied_pub_;
+  rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr occupied_inflate_pub_;
+  rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr unknown_pub_;
+  rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr free_pub_;
+  rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr esdf_pub_;
+  rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr object_grid_pub_;
+  rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr update_range_pub_;
+  rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr depth_cloud_pub_;
+  rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr filtered_depth_cloud_pub_;
+  rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr filtered_object_cloud_pub_;
+  rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr all_object_cloud_pub_;
+  rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr over_depth_object_cloud_pub_;
+  rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr value_map_pub_;
+  rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr confidence_map_pub_;
 
-  // ROS subscribers for sensor data
-  ros::Subscriber detected_object_cloud_sub_, itm_score_sub_;
+  // ROS2 subscribers for sensor data
+  rclcpp::Subscription<plan_env::msg::MultipleMasksWithConfidence>::SharedPtr detected_object_cloud_sub_;
+  rclcpp::Subscription<std_msgs::msg::Float64>::SharedPtr itm_score_sub_;
 
-  // ROS timers for periodic updates
-  ros::Timer esdf_timer_, vis_timer_;
+  // ROS2 timers for periodic updates
+  rclcpp::TimerBase::SharedPtr esdf_timer_;
+  rclcpp::TimerBase::SharedPtr vis_timer_;
 
   // Camera intrinsic parameters
   double cx_, cy_, fx_, fy_;
@@ -147,7 +164,7 @@ private:
   // Object detection and ITM integration
   int continue_over_depth_count_;  ///< Counter for maintaining over-depth object consistency
   double itm_score_;               ///< Current image-text matching score
-  ros::Time map_start_time_;       ///< Timestamp of mapping system initialization
+  rclcpp::Time map_start_time_;       ///< Timestamp of mapping system initialization
 
   friend SDFMap2D;
 };
@@ -220,9 +237,9 @@ inline void MapROS::publishObjectMap()
   cloud.height = 1;
   cloud.is_dense = true;
   cloud.header.frame_id = frame_id_;
-  sensor_msgs::PointCloud2 cloud_msg;
+  sensor_msgs::msg::PointCloud2 cloud_msg;
   pcl::toROSMsg(cloud, cloud_msg);
-  object_grid_pub_.publish(cloud_msg);
+  object_grid_pub_->publish(cloud_msg);
 }
 
 inline void MapROS::publishOccupied()
@@ -245,9 +262,9 @@ inline void MapROS::publishOccupied()
   cloud.height = 1;
   cloud.is_dense = true;
   cloud.header.frame_id = frame_id_;
-  sensor_msgs::PointCloud2 cloud_msg;
+  sensor_msgs::msg::PointCloud2 cloud_msg;
   pcl::toROSMsg(cloud, cloud_msg);
-  occupied_pub_.publish(cloud_msg);
+  occupied_pub_->publish(cloud_msg);
 }
 
 inline void MapROS::publishInfOccupied()
@@ -277,10 +294,10 @@ inline void MapROS::publishInfOccupied()
   cloud.height = 1;
   cloud.is_dense = true;
   cloud.header.frame_id = frame_id_;
-  sensor_msgs::PointCloud2 cloud_msg;
+  sensor_msgs::msg::PointCloud2 cloud_msg;
 
   pcl::toROSMsg(cloud, cloud_msg);
-  occupied_inflate_pub_.publish(cloud_msg);
+  occupied_inflate_pub_->publish(cloud_msg);
 }
 
 inline void MapROS::publishUnknown()
@@ -310,9 +327,9 @@ inline void MapROS::publishUnknown()
   cloud.height = 1;
   cloud.is_dense = true;
   cloud.header.frame_id = frame_id_;
-  sensor_msgs::PointCloud2 cloud_msg;
+  sensor_msgs::msg::PointCloud2 cloud_msg;
   pcl::toROSMsg(cloud, cloud_msg);
-  unknown_pub_.publish(cloud_msg);
+  unknown_pub_->publish(cloud_msg);
 }
 
 inline void MapROS::publishFree()
@@ -347,9 +364,9 @@ inline void MapROS::publishFree()
   cloud.height = 1;
   cloud.is_dense = true;
   cloud.header.frame_id = frame_id_;
-  sensor_msgs::PointCloud2 cloud_msg;
+  sensor_msgs::msg::PointCloud2 cloud_msg;
   pcl::toROSMsg(cloud, cloud_msg);
-  free_pub_.publish(cloud_msg);
+  free_pub_->publish(cloud_msg);
 }
 
 inline void MapROS::publishConfidenceMap()
@@ -388,9 +405,9 @@ inline void MapROS::publishConfidenceMap()
   cloud.height = 1;
   cloud.is_dense = true;
   cloud.header.frame_id = frame_id_;
-  sensor_msgs::PointCloud2 cloud_msg;
+  sensor_msgs::msg::PointCloud2 cloud_msg;
   pcl::toROSMsg(cloud, cloud_msg);
-  confidence_map_pub_.publish(cloud_msg);
+  confidence_map_pub_->publish(cloud_msg);
 }
 
 inline void MapROS::publishValueMap()
@@ -437,13 +454,13 @@ inline void MapROS::publishValueMap()
   cloud.height = 1;
   cloud.is_dense = true;
   cloud.header.frame_id = frame_id_;
-  sensor_msgs::PointCloud2 cloud_msg;
+  sensor_msgs::msg::PointCloud2 cloud_msg;
   pcl::toROSMsg(cloud, cloud_msg);
-  value_map_pub_.publish(cloud_msg);
+  value_map_pub_->publish(cloud_msg);
 }
 
 inline void MapROS::publishPointCloud(
-    const ros::Publisher& pub, const PointCloud3D::Ptr& point_cloud)
+    const rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr& pub, const PointCloud3D::Ptr& point_cloud)
 {
   Point3D pt;
   PointCloud3D cloud;
@@ -457,9 +474,9 @@ inline void MapROS::publishPointCloud(
   cloud.header.frame_id = frame_id_;
 
   // Convert and publish
-  sensor_msgs::PointCloud2 cloud_msg;
+  sensor_msgs::msg::PointCloud2 cloud_msg;
   pcl::toROSMsg(cloud, cloud_msg);
-  pub.publish(cloud_msg);
+  pub->publish(cloud_msg);
 }
 
 inline void MapROS::publishESDFMap()
@@ -509,16 +526,16 @@ inline void MapROS::publishESDFMap()
   cloud.height = 1;
   cloud.is_dense = true;
   cloud.header.frame_id = frame_id_;
-  sensor_msgs::PointCloud2 cloud_msg;
+  sensor_msgs::msg::PointCloud2 cloud_msg;
   pcl::toROSMsg(cloud, cloud_msg);
 
-  esdf_pub_.publish(cloud_msg);
+  esdf_pub_->publish(cloud_msg);
 }
 
 inline void MapROS::publishUpdateRange()
 {
   Eigen::Vector2d esdf_min_pos, esdf_max_pos, cube_pos, cube_scale;
-  visualization_msgs::Marker mk;
+  visualization_msgs::msg::Marker mk;
 
   // Convert grid indices to world coordinates
   map_->indexToPos(map_->md_->local_update_min_, esdf_min_pos);
@@ -530,9 +547,9 @@ inline void MapROS::publishUpdateRange()
 
   // Configure marker properties
   mk.header.frame_id = frame_id_;
-  mk.header.stamp = ros::Time::now();
-  mk.type = visualization_msgs::Marker::CUBE;
-  mk.action = visualization_msgs::Marker::ADD;
+  mk.header.stamp = node_->get_clock()->now();
+  mk.type = visualization_msgs::msg::Marker::CUBE;
+  mk.action = visualization_msgs::msg::Marker::ADD;
   mk.id = 0;
 
   // Set position and scale
@@ -555,7 +572,7 @@ inline void MapROS::publishUpdateRange()
   mk.pose.orientation.y = 0.0;
   mk.pose.orientation.z = 0.0;
 
-  update_range_pub_.publish(mk);
+  update_range_pub_->publish(mk);
 }
 
 }  // namespace apexnav_planner

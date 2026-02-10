@@ -1,18 +1,40 @@
 #include <path_searching/kino_astar.h>
+#include <chrono>
 
 #define uint unsigned int
 
 namespace apexnav_planner {
 void KinoAstar::init()
 {
-  std::string node_name = ros::this_node::getName();
-  nh_.param<double>(ros::this_node::getName() + "/lambda_heu", lambda_heu_, 5.0);
-  nh_.param<double>(ros::this_node::getName() + "/max_seach_time", max_search_time_, 0.1);
-  nh_.param<double>(ros::this_node::getName() + "/step_arc", step_arc_, 0.9);
-  nh_.param<double>(ros::this_node::getName() + "/checkl", checkl_, 0.2);
-  nh_.param<int>(ros::this_node::getName() + "/check_num", check_num_, 5);
-  nh_.param<double>(ros::this_node::getName() + "/oneshot_range", oneshot_range_, 5);
-  nh_.param<double>(ros::this_node::getName() + "/sampletime", sampletime_, 0.1);
+  if (!node_->has_parameter("kino_astar.lambda_heu")) {
+    node_->declare_parameter("kino_astar.lambda_heu", 5.0);
+  }
+  if (!node_->has_parameter("kino_astar.max_seach_time")) {
+    node_->declare_parameter("kino_astar.max_seach_time", 0.1);
+  }
+  if (!node_->has_parameter("kino_astar.step_arc")) {
+    node_->declare_parameter("kino_astar.step_arc", 0.9);
+  }
+  if (!node_->has_parameter("kino_astar.checkl")) {
+    node_->declare_parameter("kino_astar.checkl", 0.2);
+  }
+  if (!node_->has_parameter("kino_astar.check_num")) {
+    node_->declare_parameter("kino_astar.check_num", 5);
+  }
+  if (!node_->has_parameter("kino_astar.oneshot_range")) {
+    node_->declare_parameter("kino_astar.oneshot_range", 5.0);
+  }
+  if (!node_->has_parameter("kino_astar.sampletime")) {
+    node_->declare_parameter("kino_astar.sampletime", 0.1);
+  }
+
+  node_->get_parameter("kino_astar.lambda_heu", lambda_heu_);
+  node_->get_parameter("kino_astar.max_seach_time", max_search_time_);
+  node_->get_parameter("kino_astar.step_arc", step_arc_);
+  node_->get_parameter("kino_astar.checkl", checkl_);
+  node_->get_parameter("kino_astar.check_num", check_num_);
+  node_->get_parameter("kino_astar.oneshot_range", oneshot_range_);
+  node_->get_parameter("kino_astar.sampletime", sampletime_);
 
   inv_yaw_resolution_ = 3.15;
   inv_yaw_resolution_ = 1.0 / yaw_resolution_;
@@ -26,20 +48,48 @@ void KinoAstar::init()
   iter_num_ = 0;
   yaw_origin_ = -M_PI;
 
-  nh_.param<double>(ros::this_node::getName() + "/max_vel", max_vel_, 5);
-  nh_.param<double>(ros::this_node::getName() + "/max_acc", max_acc_, 5);
+  if (!node_->has_parameter("kino_astar.max_vel")) {
+    node_->declare_parameter("kino_astar.max_vel", 5.0);
+  }
+  if (!node_->has_parameter("kino_astar.max_acc")) {
+    node_->declare_parameter("kino_astar.max_acc", 5.0);
+  }
+  node_->get_parameter("kino_astar.max_vel", max_vel_);
+  node_->get_parameter("kino_astar.max_acc", max_acc_);
 
   max_acc_ = max_acc_ * 0.6;
   max_vel_ = max_vel_ * 0.6;
 
-  nh_.param<double>(ros::this_node::getName() + "/max_cur", max_cur_, 0.5);
-  nh_.param<double>(ros::this_node::getName() + "/non_siguav", non_siguav_, 0.01);
-  nh_.param<double>(ros::this_node::getName() + "/collision_interval", collision_interval_, 0.1);
-  nh_.param<double>(ros::this_node::getName() + "/wheel_base", wheel_base_, 0.8);
+  if (!node_->has_parameter("kino_astar.max_cur")) {
+    node_->declare_parameter("kino_astar.max_cur", 0.5);
+  }
+  if (!node_->has_parameter("kino_astar.non_siguav")) {
+    node_->declare_parameter("kino_astar.non_siguav", 0.01);
+  }
+  if (!node_->has_parameter("kino_astar.collision_interval")) {
+    node_->declare_parameter("kino_astar.collision_interval", 0.1);
+  }
+  if (!node_->has_parameter("kino_astar.wheel_base")) {
+    node_->declare_parameter("kino_astar.wheel_base", 0.8);
+  }
+  node_->get_parameter("kino_astar.max_cur", max_cur_);
+  node_->get_parameter("kino_astar.non_siguav", non_siguav_);
+  node_->get_parameter("kino_astar.collision_interval", collision_interval_);
+  node_->get_parameter("kino_astar.wheel_base", wheel_base_);
   max_steer_ = std::atan(wheel_base_ * max_cur_);
-  nh_.param<double>(ros::this_node::getName() + "/length", length_, 1);
-  nh_.param<double>(ros::this_node::getName() + "/width", width_, 1);
-  nh_.param<double>(ros::this_node::getName() + "/height", height_, 1);
+
+  if (!node_->has_parameter("kino_astar.length")) {
+    node_->declare_parameter("kino_astar.length", 1.0);
+  }
+  if (!node_->has_parameter("kino_astar.width")) {
+    node_->declare_parameter("kino_astar.width", 1.0);
+  }
+  if (!node_->has_parameter("kino_astar.height")) {
+    node_->declare_parameter("kino_astar.height", 1.0);
+  }
+  node_->get_parameter("kino_astar.length", length_);
+  node_->get_parameter("kino_astar.width", width_);
+  node_->get_parameter("kino_astar.height", height_);
 
   // SE(2) motion model (x,y,yaw), suitable for nonholonomic constraints with limited turning radius
   shotptr_s.push_back(std::make_shared<ompl::base::DubinsStateSpace>(0.2));
@@ -49,9 +99,9 @@ void KinoAstar::init()
   shotptrindex = -1;
   shotptrsize = shotptr_s.size();
 
-  expandNodes_pub_ = nh_.advertise<sensor_msgs::PointCloud2>("kinoastar/expanded_nodes", 10);
-  kinoastarFlatPathPub_ = nh_.advertise<visualization_msgs::MarkerArray>("/kinoastar/FlatPath", 10);
-  kinoastarFlatTrajPub_ = nh_.advertise<nav_msgs::Path>("/kinoastar/FlatTraj", 10);
+  expandNodes_pub_ = node_->create_publisher<sensor_msgs::msg::PointCloud2>("kinoastar/expanded_nodes", 10);
+  kinoastarFlatPathPub_ = node_->create_publisher<visualization_msgs::msg::MarkerArray>("/kinoastar/FlatPath", 10);
+  kinoastarFlatTrajPub_ = node_->create_publisher<nav_msgs::msg::Path>("/kinoastar/FlatTraj", 10);
 }
 
 void KinoAstar::reset()
@@ -83,7 +133,7 @@ int KinoAstar::search(
   bool isocc = false;
   bool initsearch = false;  // 'initsearch' indicates whether to consider initial state's velocity;
                             // false means start can only search forward
-  double start_time = ros::Time::now().toSec();
+  auto start_time = std::chrono::steady_clock::now();
 
   Eigen::Vector2d start_pos2d = start_state.head(2);
   Eigen::Vector2d end_pos2d = end_state.head(2);
@@ -98,11 +148,11 @@ int KinoAstar::search(
   // }
   isocc = isCollisionPosYaw(end_state.head(2), end_state[2]);
   if (isocc) {
-    ROS_WARN("KinoAstar: end is not free!");
+    RCLCPP_WARN(node_->get_logger(), "KinoAstar: end is not free!");
     return NO_PATH;
   }
   if (!map_->isInMap(end_pos2d)) {
-    ROS_WARN("KinoAstar: end is out of map!");
+    RCLCPP_WARN(node_->get_logger(), "KinoAstar: end is out of map!");
     return NO_PATH;
   }
 
@@ -143,11 +193,11 @@ int KinoAstar::search(
       init_ctrl = Eigen::Vector3d(0.0, 0.0, 0.0);
       retrievePath(terminate_node);
       has_path_ = true;
-      ROS_WARN("one shot! iter num: %d", iter_num_);
+      RCLCPP_WARN(node_->get_logger(), "one shot! iter num: %d", iter_num_);
       return REACH_END;
     }
     // If oneshot fails and runtime exceeds the limit, treat this node as the endpoint
-    double runTime = ros::Time::now().toSec() - start_time;
+    double runTime = std::chrono::duration<double>(std::chrono::steady_clock::now() - start_time).count();
     if (runTime > max_search_time_) {
       terminate_node = cur_node;
       retrievePath(terminate_node);
@@ -161,7 +211,7 @@ int KinoAstar::search(
         return NO_PATH;
       }
       else {
-        ROS_WARN("KinoSearch: Reach the max seach time");
+        RCLCPP_WARN(node_->get_logger(), "KinoSearch: Reach the max seach time");
         return REACH_END;
       }
     }
@@ -306,7 +356,6 @@ void KinoAstar::getKinoNode()
 {
   if (!has_path_)
     return;
-  ros::Time current = ros::Time::now();
   getSampleTraj();
   getTrajsWithTime();
 }
@@ -417,7 +466,7 @@ void KinoAstar::getTrajsWithTime()
     if (cur_singul * last_singul >= 0)
       tmp_length += evaluateDistance(state1.head(2), state2.head(2));
     else {
-      ROS_ERROR("break break break");
+      RCLCPP_ERROR(node_->get_logger(), "break break break");
       // store turning point index
       shotindex.push_back(i);
       // store direction before the turn
@@ -498,7 +547,7 @@ void KinoAstar::getTrajsWithTime()
           double yaw = (l1 / l * localTraj[k] + l2 / l * localTraj[k + 1])[2];
           bool occ = isCollisionPosYaw(Eigen::Vector2d(px, py), yaw);
           if (occ)
-            ROS_ERROR("isCollisionPosYaw occ!!!!!!!!  position: %f %f", px, py);
+            RCLCPP_ERROR(node_->get_logger(), "isCollisionPosYaw occ!!!!!!!!  position: %f %f", px, py);
 
           if (fabs(localTraj[k + 1][2] - localTraj[k][2]) >= M_PI) {
             if (localTraj[k + 1][2] <= 0)
@@ -550,7 +599,7 @@ double KinoAstar::evaluateDuration(const double& length, const double& startV, c
 {
   double critical_len;
   if (startV > max_vel_ || endV > max_vel_) {
-    ROS_ERROR("kinoAstar:evaluateDuration:start or end vel is larger that the limit!");
+    RCLCPP_ERROR(node_->get_logger(), "kinoAstar:evaluateDuration:start or end vel is larger that the limit!");
   }
   double startv2 = pow(startV, 2);
   double endv2 = pow(endV, 2);
@@ -761,7 +810,7 @@ void KinoAstar::stateTransit(
 
 void KinoAstar::nodeVis(const Eigen::Vector3d& state)
 {
-  sensor_msgs::PointCloud2 globalMap_pcd;
+  sensor_msgs::msg::PointCloud2 globalMap_pcd;
   pcl::PointCloud<pcl::PointXYZ> cloudMap;
   pcl::PointXYZ pt;
   pt.x = state[0];
@@ -773,9 +822,9 @@ void KinoAstar::nodeVis(const Eigen::Vector3d& state)
   cloudMap.height = 1;
   cloudMap.is_dense = true;
   pcl::toROSMsg(cloudMap, globalMap_pcd);
-  globalMap_pcd.header.stamp = ros::Time::now();
+  globalMap_pcd.header.stamp = node_->get_clock()->now();
   globalMap_pcd.header.frame_id = "base";
-  expandNodes_pub_.publish(globalMap_pcd);
+  expandNodes_pub_->publish(globalMap_pcd);
 
   return;
 }
@@ -786,7 +835,7 @@ double KinoAstar::evaluateLength(const double& curt, const double& locallength,
 {
   double critical_len;
   if (startV > max_vel_ * 1.5 || endV > max_vel_ * 1.5)
-    ROS_ERROR_THROTTLE(1.0, "kinoAstar:evaluateLength:start or end vel is larger that the limit!");
+    RCLCPP_ERROR_THROTTLE(node_->get_logger(), *node_->get_clock(), 1000, "kinoAstar:evaluateLength:start or end vel is larger that the limit!");
 
   double startv2 = pow(startV, 2);
   double endv2 = pow(endV, 2);
@@ -884,7 +933,7 @@ Eigen::Vector4d KinoAstar::evaluatePos(const double& input_t)
   // ensure t > 0 and < totalTrajTime
   double t = input_t;
   if (t < 0 || t > totalTrajTime) {
-    ROS_ERROR("In evaluatePos, t<0 || t>totalTrajTime");
+    RCLCPP_ERROR(node_->get_logger(), "In evaluatePos, t<0 || t>totalTrajTime");
     t = std::min<double>(std::max<double>(0, t), totalTrajTime);
   }
   double start_vel = fabs(start_state_[4]);
@@ -971,21 +1020,21 @@ void KinoAstar::kinoastarFlatPathPub(const std::vector<FlatTrajData> flat_trajs)
 {
   if (!has_path_)
     return;
-  nav_msgs::Path path;
+  nav_msgs::msg::Path path;
   path.header.frame_id = "world";
-  path.header.stamp = ros::Time::now();
-  geometry_msgs::PoseStamped pose;
+  path.header.stamp = node_->get_clock()->now();
+  geometry_msgs::msg::PoseStamped pose;
   pose.header.frame_id = "world";
 
-  visualization_msgs::MarkerArray markerarraydelete;
-  visualization_msgs::MarkerArray markerarray;
-  visualization_msgs::Marker marker;
+  visualization_msgs::msg::MarkerArray markerarraydelete;
+  visualization_msgs::msg::MarkerArray markerarray;
+  visualization_msgs::msg::Marker marker;
   marker.header.frame_id = "world";
   marker.ns = "kinoastarFlatPath";
 
-  marker.lifetime = ros::Duration();
-  marker.type = visualization_msgs::Marker::CYLINDER;
-  marker.action = visualization_msgs::Marker::DELETEALL;
+  marker.lifetime = rclcpp::Duration(0, 0);
+  marker.type = visualization_msgs::msg::Marker::CYLINDER;
+  marker.action = visualization_msgs::msg::Marker::DELETEALL;
   marker.scale.x = 0.04;
   marker.scale.y = 0.04;
   marker.scale.z = 0.02;
@@ -999,43 +1048,49 @@ void KinoAstar::kinoastarFlatPathPub(const std::vector<FlatTrajData> flat_trajs)
   marker.pose.orientation.y = 0.0;
   marker.pose.orientation.z = 0.0;
 
-  marker.header.stamp = ros::Time::now();
+  marker.header.stamp = node_->get_clock()->now();
   marker.id = 0;
   marker.pose.position.x = flat_trajs[0].traj_pts[0].x();
   marker.pose.position.y = flat_trajs[0].traj_pts[0].y();
   markerarraydelete.markers.push_back(marker);
-  kinoastarFlatPathPub_.publish(markerarraydelete);
+  kinoastarFlatPathPub_->publish(markerarraydelete);
 
-  marker.action = visualization_msgs::Marker::ADD;
+  marker.action = visualization_msgs::msg::Marker::ADD;
   for (uint i = 0; i < flat_trajs.size(); i++) {
     marker.pose.position.x = flat_trajs[i].start_state.col(0).x();
     marker.pose.position.y = flat_trajs[i].start_state.col(0).y();
     pose.pose.position.z = 0.1;
 
     markerarray.markers.push_back(marker);
-    pose.header.stamp = ros::Time::now();
+    pose.header.stamp = node_->get_clock()->now();
     pose.pose.position.x = flat_trajs[i].start_state.col(0).x();
     pose.pose.position.y = flat_trajs[i].start_state.col(0).y();
     pose.pose.position.z = 0.1;
     path.poses.push_back(pose);
 
     for (uint j = 0; j < flat_trajs[i].traj_pts.size(); j++) {
-      marker.header.stamp = ros::Time::now();
+      marker.header.stamp = node_->get_clock()->now();
       marker.id = j * 1000 + (i + 1);
       marker.pose.position.x = flat_trajs[i].traj_pts[j].x();
       marker.pose.position.y = flat_trajs[i].traj_pts[j].y();
       markerarray.markers.push_back(marker);
 
-      pose.header.stamp = ros::Time::now();
+      pose.header.stamp = node_->get_clock()->now();
       pose.pose.position.x = flat_trajs[i].traj_pts[j].x();
       pose.pose.position.y = flat_trajs[i].traj_pts[j].y();
       pose.pose.position.z = 0.1;
-      pose.pose.orientation = tf::createQuaternionMsgFromYaw(flat_trajs[i].thetas[j]);
+      // Create quaternion from yaw using tf2
+      tf2::Quaternion q;
+      q.setRPY(0, 0, flat_trajs[i].thetas[j]);
+      pose.pose.orientation.x = q.x();
+      pose.pose.orientation.y = q.y();
+      pose.pose.orientation.z = q.z();
+      pose.pose.orientation.w = q.w();
       path.poses.push_back(pose);
     }
   }
-  kinoastarFlatPathPub_.publish(markerarray);
-  kinoastarFlatTrajPub_.publish(path);
+  kinoastarFlatPathPub_->publish(markerarray);
+  kinoastarFlatTrajPub_->publish(path);
 }
 
 }  // namespace apexnav_planner

@@ -2,75 +2,105 @@
 #include <exploration_manager/exploration_fsm_traj.h>
 #include <exploration_manager/exploration_data.h>
 #include <vis_utils/planning_visualization.h>
-#include <geometry_msgs/PoseWithCovarianceStamped.h>
-#include <tf/transform_datatypes.h>
+#include <geometry_msgs/msg/pose_with_covariance_stamped.hpp>
+#include <tf2/LinearMath/Quaternion.h>
+#include <tf2/LinearMath/Matrix3x3.h>
+
+using namespace std::chrono_literals;
 
 namespace apexnav_planner {
 
-void ExplorationFSMReal::init(ros::NodeHandle& nh)
+void ExplorationFSMReal::init(rclcpp::Node::SharedPtr node)
 {
-  nh_ = nh;
+  node_ = node;
   fp_.reset(new FSMParam);
   fd_.reset(new FSMData);
 
   /* Initialize main modules */
   expl_manager_.reset(new ExplorationManager);
-  expl_manager_->initialize(nh);
-  visualization_.reset(new PlanningVisualization(nh));
+  expl_manager_->initialize(node_);
+  visualization_.reset(new PlanningVisualization(node_));
   fp_->vis_scale_ = expl_manager_->sdf_map_->getResolution() * FSMConstantsReal::VIS_SCALE_FACTOR;
 
   state_ = RealFSM::State::INIT;
 
   // Load real-world specific parameters
-  nh.param("fsm/replan_time", fp_->replan_time_, 0.2);
-  nh.param("fsm/replan_traj_end_threshold", fp_->replan_traj_end_threshold_, 1.0);
-  nh.param("fsm/replan_frontier_change_delay", fp_->replan_frontier_change_delay_, 0.5);
-  nh.param("fsm/replan_timeout", fp_->replan_timeout_, 2.0);
+  if (!node_->has_parameter("fsm/replan_time")) {
+    node_->declare_parameter("fsm/replan_time", 0.2);
+  }
+  if (!node_->has_parameter("fsm/replan_traj_end_threshold")) {
+    node_->declare_parameter("fsm/replan_traj_end_threshold", 1.0);
+  }
+  if (!node_->has_parameter("fsm/replan_frontier_change_delay")) {
+    node_->declare_parameter("fsm/replan_frontier_change_delay", 0.5);
+  }
+  if (!node_->has_parameter("fsm/replan_timeout")) {
+    node_->declare_parameter("fsm/replan_timeout", 2.0);
+  }
 
-  /* ROS Timer */
-  exec_timer_ = nh.createTimer(
-      ros::Duration(FSMConstantsReal::EXEC_TIMER_DURATION), &ExplorationFSMReal::FSMCallback, this);
-  frontier_timer_ = nh.createTimer(ros::Duration(FSMConstantsReal::FRONTIER_TIMER_DURATION),
-      &ExplorationFSMReal::frontierCallback, this);
-  safety_timer_ = nh.createTimer(ros::Duration(0.05), &ExplorationFSMReal::safetyCallback, this);
+  fp_->replan_time_ = node_->get_parameter("fsm/replan_time").as_double();
+  fp_->replan_traj_end_threshold_ = node_->get_parameter("fsm/replan_traj_end_threshold").as_double();
+  fp_->replan_frontier_change_delay_ = node_->get_parameter("fsm/replan_frontier_change_delay").as_double();
+  fp_->replan_timeout_ = node_->get_parameter("fsm/replan_timeout").as_double();
 
-  /* ROS Subscriber */
-  trigger_sub_ =
-      nh.subscribe("/move_base_simple/goal", 10, &ExplorationFSMReal::triggerCallback, this);
-  goal_sub_ = nh.subscribe("/initialpose", 10, &ExplorationFSMReal::goalCallback, this);
-  odom_sub_ = nh.subscribe("/odom_world", 10, &ExplorationFSMReal::odometryCallback, this);
-  confidence_threshold_sub_ = nh.subscribe(
-      "/detector/confidence_threshold", 10, &ExplorationFSMReal::confidenceThresholdCallback, this);
+  /* ROS2 Timer */
+  exec_timer_ = node_->create_wall_timer(
+      std::chrono::duration<double>(FSMConstantsReal::EXEC_TIMER_DURATION),
+      std::bind(&ExplorationFSMReal::FSMCallback, this));
+  frontier_timer_ = node_->create_wall_timer(
+      std::chrono::duration<double>(FSMConstantsReal::FRONTIER_TIMER_DURATION),
+      std::bind(&ExplorationFSMReal::frontierCallback, this));
+  safety_timer_ = node_->create_wall_timer(
+      50ms, std::bind(&ExplorationFSMReal::safetyCallback, this));
 
-  /* ROS Publisher */
-  ros_state_pub_ = nh.advertise<std_msgs::Int32>("/ros/state", 10);
-  expl_state_pub_ = nh.advertise<std_msgs::Int32>("/ros/expl_state", 10);
-  expl_result_pub_ = nh.advertise<std_msgs::Int32>("/ros/expl_result", 10);
-  robot_marker_pub_ = nh.advertise<visualization_msgs::Marker>("/robot", 10);
+  /* ROS2 Subscriber */
+  trigger_sub_ = node_->create_subscription<geometry_msgs::msg::PoseStamped>(
+      "/move_base_simple/goal", 10,
+      std::bind(&ExplorationFSMReal::triggerCallback, this, std::placeholders::_1));
+  goal_sub_ = node_->create_subscription<geometry_msgs::msg::PoseWithCovarianceStamped>(
+      "/initialpose", 10,
+      std::bind(&ExplorationFSMReal::goalCallback, this, std::placeholders::_1));
+  odom_sub_ = node_->create_subscription<nav_msgs::msg::Odometry>(
+      "/odom_world", 10,
+      std::bind(&ExplorationFSMReal::odometryCallback, this, std::placeholders::_1));
+  confidence_threshold_sub_ = node_->create_subscription<std_msgs::msg::Float64>(
+      "/detector/confidence_threshold", 10,
+      std::bind(&ExplorationFSMReal::confidenceThresholdCallback, this, std::placeholders::_1));
+  habitat_state_sub_ = node_->create_subscription<std_msgs::msg::Int32>(
+      "/habitat/state", 10,
+      std::bind(&ExplorationFSMReal::habitatStateCallback, this, std::placeholders::_1));
+
+  /* ROS2 Publisher */
+  ros_state_pub_ = node_->create_publisher<std_msgs::msg::Int32>("/ros/state", 10);
+  expl_state_pub_ = node_->create_publisher<std_msgs::msg::Int32>("/ros/expl_state", 10);
+  expl_result_pub_ = node_->create_publisher<std_msgs::msg::Int32>("/ros/expl_result", 10);
+  robot_marker_pub_ = node_->create_publisher<visualization_msgs::msg::Marker>("/robot", 10);
+  action_pub_ = node_->create_publisher<std_msgs::msg::Int32>("/habitat/plan_action", 10);
 
   // Real-world trajectory publishers
-  poly_traj_pub_ = nh.advertise<trajectory_manager::PolyTraj>("/planning/trajectory", 10);
-  stop_pub_ = nh.advertise<std_msgs::Empty>("/traj_server/stop", 10);
+  poly_traj_pub_ = node_->create_publisher<trajectory_manager::msg::PolyTraj>("/planning/trajectory", 10);
+  stop_pub_ = node_->create_publisher<std_msgs::msg::Empty>("/traj_server/stop", 10);
 
-  ROS_INFO("[ExplorationFSMReal] Initialization complete.");
+  RCLCPP_INFO(node_->get_logger(), "[ExplorationFSMReal] Initialization complete.");
 }
 
 // Main FSM callback for real-world exploration
-void ExplorationFSMReal::FSMCallback(const ros::TimerEvent& e)
+void ExplorationFSMReal::FSMCallback()
 {
-  exec_timer_.stop();
+  exec_timer_->cancel();
 
   // Publish current state
-  std_msgs::Int32 ros_state_msg;
+  std_msgs::msg::Int32 ros_state_msg;
   ros_state_msg.data = static_cast<int>(state_);
-  ros_state_pub_.publish(ros_state_msg);
+  ros_state_pub_->publish(ros_state_msg);
 
   switch (state_) {
     case RealFSM::State::INIT: {
       // Wait for odometry and target confidence threshold
       if (!fd_->have_odom_ || !fd_->have_confidence_) {
-        ROS_WARN_THROTTLE(1.0, "[Real] No odom || No target confidence threshold.");
-        exec_timer_.start();
+        RCLCPP_WARN_THROTTLE(node_->get_logger(), *node_->get_clock(), 1000,
+            "[Real] No odom || No target confidence threshold.");
+        exec_timer_->reset();
         return;
       }
       // Go to WAIT_TRIGGER when prerequisites are ready
@@ -81,7 +111,8 @@ void ExplorationFSMReal::FSMCallback(const ros::TimerEvent& e)
 
     case RealFSM::State::WAIT_TRIGGER: {
       // Do nothing but wait for trigger
-      ROS_WARN_THROTTLE(1.0, "[Real] Waiting for trigger...");
+      RCLCPP_WARN_THROTTLE(node_->get_logger(), *node_->get_clock(), 1000,
+          "[Real] Waiting for trigger...");
       break;
     }
 
@@ -90,8 +121,13 @@ void ExplorationFSMReal::FSMCallback(const ros::TimerEvent& e)
       if (!fd_->have_finished_) {
         fd_->have_finished_ = true;
         clearVisMarker();
+        // Signal habitat to stop
+        std_msgs::msg::Int32 action_msg;
+        action_msg.data = 0;  // ACTION::STOP
+        action_pub_->publish(action_msg);
       }
-      ROS_WARN_THROTTLE(1.0, "[Real] Finish exploration!");
+      RCLCPP_WARN_THROTTLE(node_->get_logger(), *node_->get_clock(), 1000,
+          "[Real] Finish exploration!");
       break;
     }
 
@@ -107,8 +143,8 @@ void ExplorationFSMReal::FSMCallback(const ros::TimerEvent& e)
       else {
         // Robot is moving, predict future state for smooth replanning
         LocalTrajectory* info = &expl_manager_->gcopter_->local_trajectory_;
-        double t_plan = (ros::Time::now() - info->start_time).toSec() + fp_->replan_time_;
-        t_plan = min(t_plan, info->duration);
+        double t_plan = (node_->get_clock()->now() - info->start_time).seconds() + fp_->replan_time_;
+        t_plan = std::min(t_plan, info->duration);
 
         Eigen::Vector3d cur_pos = info->traj.getPos(t_plan);
         Eigen::Vector3d cur_vel = info->traj.getVel(t_plan);
@@ -133,14 +169,37 @@ void ExplorationFSMReal::FSMCallback(const ros::TimerEvent& e)
       TrajPlannerResult res = callTrajectoryPlanner();
 
       if (res == TrajPlannerResult::FAILED) {
-        ROS_WARN("[Real] Plan trajectory failed");
+        ++replan_fail_count_;
         fd_->static_state_ = true;
+        if (replan_fail_count_ >= FSMConstantsReal::MAX_REPLAN_FAILURES) {
+          RCLCPP_ERROR(node_->get_logger(),
+              "[Real] Plan trajectory failed %d times, stopping and waiting for new trigger",
+              replan_fail_count_);
+          emergencyStop();
+          replan_fail_count_ = 0;
+          transitState(RealFSM::State::WAIT_TRIGGER, "FSM");
+        } else {
+          RCLCPP_WARN_THROTTLE(node_->get_logger(), *node_->get_clock(), 500,
+              "[Real] Plan trajectory failed (%d/%d), retrying...",
+              replan_fail_count_, FSMConstantsReal::MAX_REPLAN_FAILURES);
+        }
       }
       else if (res == TrajPlannerResult::SUCCESS) {
+        replan_fail_count_ = 0;
         transitState(RealFSM::State::EXEC_TRAJ, "FSM");
       }
       else {  // TrajPlannerResult::MISSION_COMPLETE
-        transitState(RealFSM::State::FINISH, "FSM");
+        // If planning from predicted trajectory endpoint failed,
+        // retry from actual odom position before giving up
+        if (!fd_->static_state_) {
+          RCLCPP_WARN(node_->get_logger(),
+              "[Real] No frontier from predicted pos, retrying from odom...");
+          fd_->static_state_ = true;
+          // Don't transition - stay in PLAN_TRAJ to retry on next FSM tick
+        }
+        else {
+          transitState(RealFSM::State::FINISH, "FSM");
+        }
       }
 
       visualize();
@@ -149,11 +208,11 @@ void ExplorationFSMReal::FSMCallback(const ros::TimerEvent& e)
 
     case RealFSM::State::EXEC_TRAJ: {
       // Publish trajectory and transition to execution monitoring
-      double dt = (ros::Time::now() - fd_->newest_traj_.start_time).toSec();
+      double dt = (node_->get_clock()->now() - fd_->newest_traj_.start_time).seconds();
       if (dt > 0) {
-        trajectory_manager::PolyTraj poly_msg;
+        trajectory_manager::msg::PolyTraj poly_msg;
         polyTraj2ROSMsg(fd_->newest_traj_, poly_msg);
-        poly_traj_pub_.publish(poly_msg);
+        poly_traj_pub_->publish(poly_msg);
         fd_->static_state_ = false;
         transitState(RealFSM::State::REPLAN, "FSM");
       }
@@ -163,14 +222,14 @@ void ExplorationFSMReal::FSMCallback(const ros::TimerEvent& e)
     case RealFSM::State::REPLAN: {
       // Monitor trajectory execution and decide when to replan
       LocalTrajectory* info = &expl_manager_->gcopter_->local_trajectory_;
-      double t_cur = (ros::Time::now() - info->start_time).toSec();
+      double t_cur = (node_->get_clock()->now() - info->start_time).seconds();
       double time_to_end = info->duration - t_cur;
 
       // Replan if trajectory is almost finished
       if (time_to_end < fp_->replan_traj_end_threshold_) {
         transitState(RealFSM::State::PLAN_TRAJ, "FSM");
-        ROS_WARN("[Real] Replan: traj fully executed");
-        exec_timer_.start();
+        RCLCPP_WARN(node_->get_logger(), "[Real] Replan: traj fully executed");
+        exec_timer_->reset();
         return;
       }
 
@@ -179,28 +238,28 @@ void ExplorationFSMReal::FSMCallback(const ros::TimerEvent& e)
           fd_->final_result_ == FINAL_RESULT::EXPLORE &&
           expl_manager_->frontier_map2d_->isAnyFrontierChanged()) {
         transitState(RealFSM::State::PLAN_TRAJ, "FSM");
-        ROS_WARN("[Real] Replan: frontier changed");
-        exec_timer_.start();
+        RCLCPP_WARN(node_->get_logger(), "[Real] Replan: frontier changed");
+        exec_timer_->reset();
         return;
       }
 
       // Replan if trajectory timeout
       if (t_cur > fp_->replan_timeout_) {
         transitState(RealFSM::State::PLAN_TRAJ, "FSM");
-        ROS_WARN("[Real] Replan: time out");
-        exec_timer_.start();
+        RCLCPP_WARN(node_->get_logger(), "[Real] Replan: time out");
+        exec_timer_->reset();
         return;
       }
       break;
     }
   }
 
-  exec_timer_.start();
+  exec_timer_->reset();
 }
 
 TrajPlannerResult ExplorationFSMReal::callTrajectoryPlanner()
 {
-  ros::Time time_r = ros::Time::now() + ros::Duration(fp_->replan_time_);
+  rclcpp::Time time_r = node_->get_clock()->now() + rclcpp::Duration::from_seconds(fp_->replan_time_);
   updateFrontierAndObject();
 
   // Call exploration manager to find next best point
@@ -216,12 +275,12 @@ TrajPlannerResult ExplorationFSMReal::callTrajectoryPlanner()
     fd_->final_result_ = FINAL_RESULT::SEARCH_OBJECT;
 
   // Publish exploration result
-  std_msgs::Int32 expl_result_msg;
+  std_msgs::msg::Int32 expl_result_msg;
   expl_result_msg.data = fd_->final_result_;
-  expl_result_pub_.publish(expl_result_msg);
+  expl_result_pub_->publish(expl_result_msg);
 
   if (fd_->final_result_ == FINAL_RESULT::NO_FRONTIER) {
-    ROS_WARN("[Real] No (passable) frontier");
+    RCLCPP_WARN(node_->get_logger(), "[Real] No (passable) frontier");
     return TrajPlannerResult::MISSION_COMPLETE;
   }
 
@@ -234,7 +293,7 @@ TrajPlannerResult ExplorationFSMReal::callTrajectoryPlanner()
   // Check if reached object
   if (fd_->final_result_ == FINAL_RESULT::SEARCH_OBJECT &&
       (fd_->start_pt_.head(2) - goal_pos).norm() < 0.25) {
-    ROS_ERROR("[Real] Reach the object successfully!");
+    RCLCPP_ERROR(node_->get_logger(), "[Real] Reach the object successfully!");
     return TrajPlannerResult::MISSION_COMPLETE;
   }
 
@@ -249,7 +308,8 @@ TrajPlannerResult ExplorationFSMReal::callTrajectoryPlanner()
   bool traj_res = expl_manager_->planTrajectory(current_state, goal_state, current_control);
   if (traj_res) {
     auto info = &expl_manager_->gcopter_->local_trajectory_;
-    info->start_time = (ros::Time::now() - time_r).toSec() > 0 ? ros::Time::now() : time_r;
+    info->start_time = (node_->get_clock()->now() - time_r).seconds() > 0 ?
+        node_->get_clock()->now() : time_r;
     fd_->newest_traj_ = expl_manager_->gcopter_->local_trajectory_;
     return TrajPlannerResult::SUCCESS;
   }
@@ -258,7 +318,7 @@ TrajPlannerResult ExplorationFSMReal::callTrajectoryPlanner()
 }
 
 void ExplorationFSMReal::polyTraj2ROSMsg(
-    const LocalTrajectory& local_traj, trajectory_manager::PolyTraj& poly_msg)
+    const LocalTrajectory& local_traj, trajectory_manager::msg::PolyTraj& poly_msg)
 {
   auto data = &local_traj;
   Eigen::VectorXd durs = data->traj.getDurations();
@@ -439,7 +499,7 @@ bool ExplorationFSMReal::updateFrontierAndObject()
   return change_flag;
 }
 
-void ExplorationFSMReal::frontierCallback(const ros::TimerEvent& e)
+void ExplorationFSMReal::frontierCallback()
 {
   // Update frontiers and visualize in idle states
   if (state_ != RealFSM::State::WAIT_TRIGGER && state_ != RealFSM::State::FINISH)
@@ -449,17 +509,18 @@ void ExplorationFSMReal::frontierCallback(const ros::TimerEvent& e)
   visualize();
 }
 
-void ExplorationFSMReal::triggerCallback(const geometry_msgs::PoseStampedConstPtr& msg)
+void ExplorationFSMReal::triggerCallback(const geometry_msgs::msg::PoseStamped::SharedPtr msg)
 {
   if (state_ != RealFSM::State::WAIT_TRIGGER)
     return;
 
   fd_->trigger_ = true;
-  ROS_INFO("[Real] Exploration triggered!");
+  replan_fail_count_ = 0;
+  RCLCPP_INFO(node_->get_logger(), "[Real] Exploration triggered!");
   transitState(RealFSM::State::PLAN_TRAJ, "triggerCallback");
 }
 
-void ExplorationFSMReal::odometryCallback(const nav_msgs::OdometryConstPtr& msg)
+void ExplorationFSMReal::odometryCallback(const nav_msgs::msg::Odometry::SharedPtr msg)
 {
   fd_->odom_pos_(0) = msg->pose.pose.position.x;
   fd_->odom_pos_(1) = msg->pose.pose.position.y;
@@ -489,25 +550,25 @@ void ExplorationFSMReal::odometryCallback(const nav_msgs::OdometryConstPtr& msg)
   publishRobotMarker();
 }
 
-void ExplorationFSMReal::confidenceThresholdCallback(const std_msgs::Float64ConstPtr& msg)
+void ExplorationFSMReal::confidenceThresholdCallback(const std_msgs::msg::Float64::SharedPtr msg)
 {
   if (fd_->have_confidence_)
     return;
   fd_->have_confidence_ = true;
   expl_manager_->sdf_map_->object_map2d_->setConfidenceThreshold(msg->data);
-  ROS_INFO("[Real] Confidence threshold set to: %.2f", msg->data);
+  RCLCPP_INFO(node_->get_logger(), "[Real] Confidence threshold set to: %.2f", msg->data);
 }
 
-void ExplorationFSMReal::goalCallback(const geometry_msgs::PoseWithCovarianceStamped::ConstPtr& msg)
+void ExplorationFSMReal::goalCallback(const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr msg)
 {
   double x = msg->pose.pose.position.x;
   double y = msg->pose.pose.position.y;
 
-  tf::Quaternion q(msg->pose.pose.orientation.x, msg->pose.pose.orientation.y,
+  tf2::Quaternion q(msg->pose.pose.orientation.x, msg->pose.pose.orientation.y,
       msg->pose.pose.orientation.z, msg->pose.pose.orientation.w);
 
   double roll, pitch, yaw;
-  tf::Matrix3x3(q).getRPY(roll, pitch, yaw);
+  tf2::Matrix3x3(q).getRPY(roll, pitch, yaw);
 
   Eigen::VectorXd goal_state(5), current_state(5);
   Eigen::Vector3d current_control;
@@ -516,31 +577,38 @@ void ExplorationFSMReal::goalCallback(const geometry_msgs::PoseWithCovarianceSta
   if ((current_state.head(2) - goal_state.head(2)).norm() > 0.2) {
     current_control << 0.0, 0.0, 0.0;
     expl_manager_->planTrajectory(current_state, goal_state, current_control);
-    trajectory_manager::PolyTraj poly_msg;
+    trajectory_manager::msg::PolyTraj poly_msg;
     polyTraj2ROSMsg(expl_manager_->gcopter_->local_trajectory_, poly_msg);
-    poly_traj_pub_.publish(poly_msg);
+    poly_traj_pub_->publish(poly_msg);
   }
-  ROS_INFO("[Real] Received goal pose: x=%.2f, y=%.2f, yaw=%.2f", x, y, yaw);
+  RCLCPP_INFO(node_->get_logger(), "[Real] Received goal pose: x=%.2f, y=%.2f, yaw=%.2f", x, y, yaw);
+}
+
+void ExplorationFSMReal::trajectoryFinishCallback(const std_msgs::msg::Empty::SharedPtr msg)
+{
+  // Handle trajectory finish notification
+  (void)msg;
 }
 
 void ExplorationFSMReal::emergencyStop()
 {
   fd_->static_state_ = true;
-  stop_pub_.publish(std_msgs::Empty());
+  stop_pub_->publish(std_msgs::msg::Empty());
 }
 
-void ExplorationFSMReal::safetyCallback(const ros::TimerEvent& e)
+void ExplorationFSMReal::safetyCallback()
 {
   if (state_ != RealFSM::State::REPLAN)
     return;
 
   // Check if robot deviates from planned trajectory
-  double t_cur = (ros::Time::now() - expl_manager_->gcopter_->local_trajectory_.start_time).toSec();
-  t_cur = min(t_cur, expl_manager_->gcopter_->local_trajectory_.duration);
+  double t_cur = (node_->get_clock()->now() - expl_manager_->gcopter_->local_trajectory_.start_time).seconds();
+  t_cur = std::min(t_cur, expl_manager_->gcopter_->local_trajectory_.duration);
   Eigen::Vector3d cur_pos = expl_manager_->gcopter_->local_trajectory_.traj.getPos(t_cur);
 
   if ((cur_pos.head(2) - fd_->odom_pos_.head(2)).norm() > 0.3) {
-    ROS_ERROR("[Real] Odom far from traj (%.2f, %.2f), Stop!!!", cur_pos(0), cur_pos(1));
+    RCLCPP_ERROR(node_->get_logger(), "[Real] Odom far from traj (%.2f, %.2f), Stop!!!",
+        cur_pos(0), cur_pos(1));
     emergencyStop();
     transitState(RealFSM::State::PLAN_TRAJ, "Odom Far From Trajectory");
     return;
@@ -551,7 +619,7 @@ void ExplorationFSMReal::safetyCallback(const ros::TimerEvent& e)
   double sample_dt = 0.1;     // Sample every 0.1 seconds
 
   for (double t_check = t_cur;
-      t_check <= min(t_cur + time_horizon, expl_manager_->gcopter_->local_trajectory_.duration);
+      t_check <= std::min(t_cur + time_horizon, expl_manager_->gcopter_->local_trajectory_.duration);
       t_check += sample_dt) {
     Eigen::Vector3d check_pos = expl_manager_->gcopter_->local_trajectory_.traj.getPos(t_check);
     Eigen::Vector2d check_pos_2d = check_pos.head(2);
@@ -561,7 +629,7 @@ void ExplorationFSMReal::safetyCallback(const ros::TimerEvent& e)
       continue;
 
     if (expl_manager_->sdf_map_->getInflateOccupancy(check_pos_2d)) {
-      ROS_ERROR("[Real] Safety Stop!!! Obstacle detected (%.2f, %.2f) at time %.2f",
+      RCLCPP_ERROR(node_->get_logger(), "[Real] Safety Stop!!! Obstacle detected (%.2f, %.2f) at time %.2f",
           check_pos_2d(0), check_pos_2d(1), t_check);
       emergencyStop();
       transitState(RealFSM::State::PLAN_TRAJ, "Trajectory Safety Stop");
@@ -576,13 +644,13 @@ void ExplorationFSMReal::publishRobotMarker()
   const double robot_radius = FSMConstantsReal::ROBOT_RADIUS;
 
   // Create robot body cylinder marker
-  visualization_msgs::Marker robot_marker;
+  visualization_msgs::msg::Marker robot_marker;
   robot_marker.header.frame_id = "world";
-  robot_marker.header.stamp = ros::Time::now();
+  robot_marker.header.stamp = node_->get_clock()->now();
   robot_marker.ns = "robot_position";
   robot_marker.id = 0;
-  robot_marker.type = visualization_msgs::Marker::CYLINDER;
-  robot_marker.action = visualization_msgs::Marker::ADD;
+  robot_marker.type = visualization_msgs::msg::Marker::CYLINDER;
+  robot_marker.action = visualization_msgs::msg::Marker::ADD;
 
   robot_marker.pose.position.x = fd_->odom_pos_(0);
   robot_marker.pose.position.y = fd_->odom_pos_(1);
@@ -603,13 +671,13 @@ void ExplorationFSMReal::publishRobotMarker()
   robot_marker.color.a = 1.0;
 
   // Create direction arrow marker
-  visualization_msgs::Marker arrow_marker;
+  visualization_msgs::msg::Marker arrow_marker;
   arrow_marker.header.frame_id = "world";
-  arrow_marker.header.stamp = ros::Time::now();
+  arrow_marker.header.stamp = node_->get_clock()->now();
   arrow_marker.ns = "robot_direction";
   arrow_marker.id = 1;
-  arrow_marker.type = visualization_msgs::Marker::ARROW;
-  arrow_marker.action = visualization_msgs::Marker::ADD;
+  arrow_marker.type = visualization_msgs::msg::Marker::ARROW;
+  arrow_marker.action = visualization_msgs::msg::Marker::ADD;
 
   arrow_marker.pose.position.x = fd_->odom_pos_(0);
   arrow_marker.pose.position.y = fd_->odom_pos_(1);
@@ -629,17 +697,26 @@ void ExplorationFSMReal::publishRobotMarker()
   arrow_marker.color.b = 10.0 / 255.0;
   arrow_marker.color.a = 1.0;
 
-  robot_marker_pub_.publish(robot_marker);
-  robot_marker_pub_.publish(arrow_marker);
+  robot_marker_pub_->publish(robot_marker);
+  robot_marker_pub_->publish(arrow_marker);
 }
 
 void ExplorationFSMReal::transitState(RealFSM::State new_state, std::string pos_call)
 {
   std::string state_str[] = { "INIT", "WAIT_TRIGGER", "PLAN_TRAJ", "EXEC_TRAJ", "REPLAN",
     "FINISH" };
-  ROS_INFO("[Real FSM]: %s -> from %s to %s", pos_call.c_str(),
+  RCLCPP_INFO(node_->get_logger(), "[Real FSM]: %s -> from %s to %s", pos_call.c_str(),
       state_str[static_cast<int>(state_)].c_str(), state_str[static_cast<int>(new_state)].c_str());
   state_ = new_state;
+}
+
+void ExplorationFSMReal::habitatStateCallback(const std_msgs::msg::Int32::SharedPtr msg)
+{
+  // HABITAT_STATE::EPISODE_FINISH = 3
+  if (msg->data == 3) {
+    RCLCPP_INFO(node_->get_logger(), "[Real] Episode finished, reinitializing...");
+    init(node_);
+  }
 }
 
 }  // namespace apexnav_planner

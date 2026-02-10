@@ -4,8 +4,7 @@
 #include <Eigen/Eigen>
 #include <iostream>
 #include <map>
-#include <ros/console.h>
-#include <ros/ros.h>
+#include <rclcpp/rclcpp.hpp>
 #include <string>
 #include <unordered_map>
 #include <plan_env/sdf_map2d.h>
@@ -42,7 +41,7 @@ public:
   ~Astar2D();
   enum { REACH_END = 1, NO_PATH = 2 };
   enum SAFETY_MODE { NORMAL = 0, OPTIMISTIC = 1, EXTREME = 2 };
-  void init(ros::NodeHandle& nh, const SDFMap2D::Ptr& sdf_map);
+  void init(rclcpp::Node::SharedPtr node, const SDFMap2D::Ptr& sdf_map);
   void reset();
   int astarSearch(const Eigen::Vector2d& start_pt, const Eigen::Vector2d& end_pt,
       double success_dist = 0.1, double max_time = 0.01, int safety_mode = SAFETY_MODE::NORMAL);

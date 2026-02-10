@@ -4,56 +4,70 @@
 #include <exploration_manager/exploration_data.h>
 #include <vis_utils/planning_visualization.h>
 
+using namespace std::chrono_literals;
+
 namespace apexnav_planner {
-void ExplorationFSM::init(ros::NodeHandle& nh)
+void ExplorationFSM::init(rclcpp::Node::SharedPtr node)
 {
-  nh_ = nh;
+  bool first_init = (node_ == nullptr);
+  node_ = node;
   fp_.reset(new FSMParam);
   fd_.reset(new FSMData);
 
   /* Initialize main modules */
   expl_manager_.reset(new ExplorationManager);
-  expl_manager_->initialize(nh);
-  visualization_.reset(new PlanningVisualization(nh));
+  expl_manager_->initialize(node_);
+  visualization_.reset(new PlanningVisualization(node_));
   fp_->vis_scale_ = expl_manager_->sdf_map_->getResolution() * FSMConstants::VIS_SCALE_FACTOR;
 
   state_ = ROS_STATE::INIT;
 
-  /* ROS Timer */
-  exec_timer_ = nh.createTimer(
-      ros::Duration(FSMConstants::EXEC_TIMER_DURATION), &ExplorationFSM::FSMCallback, this);
-  frontier_timer_ = nh.createTimer(ros::Duration(FSMConstants::FRONTIER_TIMER_DURATION),
-      &ExplorationFSM::frontierCallback, this);
+  if (!first_init) return;  // Skip timer/sub/pub creation on re-init (episode reset)
 
-  /* ROS Subscriber */
-  trigger_sub_ = nh.subscribe("/move_base_simple/goal", 10, &ExplorationFSM::triggerCallback, this);
-  odom_sub_ = nh.subscribe("/odom_world", 10, &ExplorationFSM::odometryCallback, this);
-  habitat_state_sub_ =
-      nh.subscribe("/habitat/state", 10, &ExplorationFSM::habitatStateCallback, this);
-  confidence_threshold_sub_ = node_.subscribe(
-      "/detector/confidence_threshold", 10, &ExplorationFSM::confidenceThresholdCallback, this);
+  /* ROS2 Timer */
+  exec_timer_ = node_->create_wall_timer(
+      std::chrono::duration<double>(FSMConstants::EXEC_TIMER_DURATION),
+      std::bind(&ExplorationFSM::FSMCallback, this));
+  frontier_timer_ = node_->create_wall_timer(
+      std::chrono::duration<double>(FSMConstants::FRONTIER_TIMER_DURATION),
+      std::bind(&ExplorationFSM::frontierCallback, this));
 
-  /* ROS Publisher */
-  ros_state_pub_ = nh.advertise<std_msgs::Int32>("/ros/state", 10);
-  expl_state_pub_ = nh.advertise<std_msgs::Int32>("/ros/expl_state", 10);
-  action_pub_ = nh.advertise<std_msgs::Int32>("/habitat/plan_action", 10);
-  expl_result_pub_ = nh.advertise<std_msgs::Int32>("/ros/expl_result", 10);
-  robot_marker_pub_ = nh.advertise<visualization_msgs::Marker>("/robot", 10);
+  /* ROS2 Subscriber */
+  trigger_sub_ = node_->create_subscription<geometry_msgs::msg::PoseStamped>(
+      "/move_base_simple/goal", 10,
+      std::bind(&ExplorationFSM::triggerCallback, this, std::placeholders::_1));
+  odom_sub_ = node_->create_subscription<nav_msgs::msg::Odometry>(
+      "/odom_world", 10,
+      std::bind(&ExplorationFSM::odometryCallback, this, std::placeholders::_1));
+  habitat_state_sub_ = node_->create_subscription<std_msgs::msg::Int32>(
+      "/habitat/state", 10,
+      std::bind(&ExplorationFSM::habitatStateCallback, this, std::placeholders::_1));
+  confidence_threshold_sub_ = node_->create_subscription<std_msgs::msg::Float64>(
+      "/detector/confidence_threshold", 10,
+      std::bind(&ExplorationFSM::confidenceThresholdCallback, this, std::placeholders::_1));
+
+  /* ROS2 Publisher */
+  ros_state_pub_ = node_->create_publisher<std_msgs::msg::Int32>("/ros/state", 10);
+  expl_state_pub_ = node_->create_publisher<std_msgs::msg::Int32>("/ros/expl_state", 10);
+  action_pub_ = node_->create_publisher<std_msgs::msg::Int32>("/habitat/plan_action", 10);
+  expl_result_pub_ = node_->create_publisher<std_msgs::msg::Int32>("/ros/expl_result", 10);
+  robot_marker_pub_ = node_->create_publisher<visualization_msgs::msg::Marker>("/robot", 10);
 }
 
 // FSM between ROS and Habitat for action planning and execution
-void ExplorationFSM::FSMCallback(const ros::TimerEvent& e)
+void ExplorationFSM::FSMCallback()
 {
-  exec_timer_.stop();
-  std_msgs::Int32 ros_state_msg;
+  exec_timer_->cancel();
+  std_msgs::msg::Int32 ros_state_msg;
   ros_state_msg.data = state_;
-  ros_state_pub_.publish(ros_state_msg);
+  ros_state_pub_->publish(ros_state_msg);
   switch (state_) {
     case ROS_STATE::INIT: {
       // Wait for odometry and target confidence threshold
       if (!fd_->have_odom_ || !fd_->have_confidence_) {
-        ROS_WARN_THROTTLE(1.0, "No odom || No target confidence threshold.");
-        exec_timer_.start();
+        RCLCPP_WARN_THROTTLE(node_->get_logger(), *node_->get_clock(), 1000,
+            "No odom || No target confidence threshold.");
+        exec_timer_->reset();
         return;
       }
       // Go to WAIT_TRIGGER when prerequisites are ready
@@ -64,7 +78,7 @@ void ExplorationFSM::FSMCallback(const ros::TimerEvent& e)
 
     case ROS_STATE::WAIT_TRIGGER: {
       // Do nothing but wait for trigger
-      ROS_WARN_THROTTLE(1.0, "Wait for trigger.");
+      RCLCPP_WARN_THROTTLE(node_->get_logger(), *node_->get_clock(), 1000, "Wait for trigger.");
       break;
     }
 
@@ -72,11 +86,11 @@ void ExplorationFSM::FSMCallback(const ros::TimerEvent& e)
       if (!fd_->have_finished_) {
         fd_->have_finished_ = true;
         clearVisMarker();
-        std_msgs::Int32 action_msg;
+        std_msgs::msg::Int32 action_msg;
         action_msg.data = ACTION::STOP;
-        action_pub_.publish(action_msg);
+        action_pub_->publish(action_msg);
       }
-      ROS_WARN_THROTTLE(1.0, "Finish One Episode!!!");
+      RCLCPP_WARN_THROTTLE(node_->get_logger(), *node_->get_clock(), 1000, "Finish One Episode!!!");
       break;
     }
 
@@ -91,7 +105,7 @@ void ExplorationFSM::FSMCallback(const ros::TimerEvent& e)
           fd_->newest_action_ = ACTION::TURN_UP;
         else
           fd_->newest_action_ = ACTION::TURN_LEFT;
-        ROS_WARN("Init Mode Process -----> (%d/26)", fd_->init_action_count_);
+        RCLCPP_WARN(node_->get_logger(), "Init Mode Process -----> (%d/26)", fd_->init_action_count_);
         fd_->init_action_count_++;
         transitState(ROS_STATE::PUB_ACTION, "FSM");
         updateFrontierAndObject();
@@ -101,15 +115,15 @@ void ExplorationFSM::FSMCallback(const ros::TimerEvent& e)
         fd_->start_pt_ = fd_->odom_pos_;
         fd_->start_yaw_(0) = fd_->odom_yaw_;
 
-        auto t1 = ros::Time::now();
+        auto t1 = node_->get_clock()->now();
         fd_->final_result_ = callActionPlanner();
-        double call_action_planner_time = (ros::Time::now() - t1).toSec();
-        ROS_INFO_THROTTLE(
-            10.0, "[Calculating Time] Planning process time = %.3f s", call_action_planner_time);
+        double call_action_planner_time = (node_->get_clock()->now() - t1).seconds();
+        RCLCPP_INFO_THROTTLE(node_->get_logger(), *node_->get_clock(), 10000,
+            "[Calculating Time] Planning process time = %.3f s", call_action_planner_time);
 
-        std_msgs::Int32 expl_state_msg;
+        std_msgs::msg::Int32 expl_state_msg;
         expl_state_msg.data = fd_->final_result_;
-        expl_state_pub_.publish(expl_state_msg);
+        expl_state_pub_->publish(expl_state_msg);
         if (fd_->final_result_ == FINAL_RESULT::EXPLORE ||
             fd_->final_result_ == FINAL_RESULT::SEARCH_OBJECT)
           transitState(ROS_STATE::PUB_ACTION, "FSM");
@@ -121,19 +135,19 @@ void ExplorationFSM::FSMCallback(const ros::TimerEvent& e)
     }
 
     case ROS_STATE::PUB_ACTION: {
-      std_msgs::Int32 action_msg;
+      std_msgs::msg::Int32 action_msg;
       action_msg.data = fd_->newest_action_;
-      action_pub_.publish(action_msg);
+      action_pub_->publish(action_msg);
       transitState(ROS_STATE::WAIT_ACTION_FINISH, "FSM");
       break;
     }
 
     case ROS_STATE::WAIT_ACTION_FINISH: {
-      exec_timer_.start();
+      exec_timer_->reset();
       break;
     }
   }
-  exec_timer_.start();
+  exec_timer_->reset();
 }
 
 /**
@@ -160,7 +174,7 @@ int ExplorationFSM::callActionPlanner()
   // Reach the object - check if close enough to target object
   if (fd_->final_result_ == FINAL_RESULT::SEARCH_OBJECT &&
       (current_pos - expl_manager_->ed_->next_pos_).norm() < reach_distance) {
-    ROS_ERROR("Reach the object successfully!!!");
+    RCLCPP_ERROR(node_->get_logger(), "Reach the object successfully!!!");
     final_res = FINAL_RESULT::REACH_OBJECT;
     return final_res;
   }
@@ -172,7 +186,7 @@ int ExplorationFSM::callActionPlanner()
       last_action == ACTION::MOVE_FORWARD) {
     if (fd_->final_result_ == FINAL_RESULT::SEARCH_OBJECT &&
         (current_pos - expl_manager_->ed_->next_pos_).norm() < soft_reach_distance) {
-      ROS_ERROR("Reach the object successfully!!!");
+      RCLCPP_ERROR(node_->get_logger(), "Reach the object successfully!!!");
       final_res = FINAL_RESULT::REACH_OBJECT;
       return final_res;
     }
@@ -184,7 +198,7 @@ int ExplorationFSM::callActionPlanner()
       if ((stucking_pos - current_pos).norm() < stucking_distance &&
           fabs(stucking_yaw - current_yaw) < FSMConstants::ACTION_ANGLE) {
         past_stucking_flag = true;
-        ROS_ERROR("Still stuck at the same place");
+        RCLCPP_ERROR(node_->get_logger(), "Still stuck at the same place");
         break;
       }
     }
@@ -197,12 +211,12 @@ int ExplorationFSM::callActionPlanner()
   }
 
   if (fd_->escape_stucking_flag_ && (current_pos - last_pos).norm() >= stucking_distance) {
-    ROS_ERROR("Escaped from stuck state.");
+    RCLCPP_ERROR(node_->get_logger(), "Escaped from stuck state.");
     fd_->escape_stucking_flag_ = false;
   }
 
   if (fd_->escape_stucking_flag_) {
-    ROS_ERROR("Escaping stuck...");
+    RCLCPP_ERROR(node_->get_logger(), "Escaping stuck...");
     if (fd_->escape_stucking_count_ == 0)
       fd_->newest_action_ = ACTION::TURN_RIGHT;
     else if (fd_->escape_stucking_count_ == 1)
@@ -225,7 +239,7 @@ int ExplorationFSM::callActionPlanner()
       fd_->newest_action_ = ACTION::MOVE_FORWARD;
     else {
       // Failed to escape - mark area as occupied and add to stuck points
-      ROS_ERROR("Cannot escape stuck state.");
+      RCLCPP_ERROR(node_->get_logger(), "Cannot escape stuck state.");
       fd_->escape_stucking_flag_ = false;
       expl_manager_->sdf_map_->setForceOccGrid(current_pos);
       double forward_distance = FSMConstants::FORWARD_DISTANCE;
@@ -274,9 +288,9 @@ int ExplorationFSM::callActionPlanner()
   /*******  Decide whether to replan path (stability heuristic) END *******/
 
   // Publish exploration result to monitor
-  std_msgs::Int32 expl_result_msg;
+  std_msgs::msg::Int32 expl_result_msg;
   expl_result_msg.data = expl_res;
-  expl_result_pub_.publish(expl_result_msg);
+  expl_result_pub_->publish(expl_result_msg);
 
   // Determine current high-level state based on exploration results
   if (expl_res == EXPL_RESULT::EXPLORATION)
@@ -288,7 +302,7 @@ int ExplorationFSM::callActionPlanner()
     final_res = FINAL_RESULT::SEARCH_OBJECT;
 
   if (final_res == FINAL_RESULT::NO_FRONTIER || expl_manager_->ed_->next_best_path_.empty()) {
-    ROS_WARN("No (passable) frontier");
+    RCLCPP_WARN(node_->get_logger(), "No (passable) frontier");
     return final_res;
   }
 
@@ -296,13 +310,14 @@ int ExplorationFSM::callActionPlanner()
   Eigen::Vector2d last_end_pos = fd_->last_next_pos_;
   fd_->last_next_pos_ = end_pos;
   double min_dist = (current_pos - end_pos).norm();
-  ROS_WARN("To the next point (%.2fm %.2fm), distance = %.2f m", end_pos(0), end_pos(1), min_dist);
+  RCLCPP_WARN(node_->get_logger(), "To the next point (%.2fm %.2fm), distance = %.2f m",
+      end_pos(0), end_pos(1), min_dist);
 
   // Handling being stuck while exploring toward a specific frontier
   if (final_res == FINAL_RESULT::EXPLORE) {
     // Force dormant if very close to target but still exploring
     if (min_dist < FSMConstants::FORCE_DORMANT_DISTANCE) {
-      ROS_ERROR("Force set dormant frontier.");
+      RCLCPP_ERROR(node_->get_logger(), "Force set dormant frontier.");
       expl_manager_->frontier_map2d_->setForceDormantFrontier(end_pos);
       fd_->dormant_frontier_flag_ = true;
     }
@@ -311,15 +326,17 @@ int ExplorationFSM::callActionPlanner()
     if ((end_pos - last_end_pos).norm() < 1e-3 &&
         (current_pos - last_pos).norm() < stucking_distance) {
       fd_->stucking_next_pos_count_++;
-      ROS_ERROR_COND(fd_->stucking_next_pos_count_ > 8, "stucking_next_pos_count_ = %d",
-          fd_->stucking_next_pos_count_);
+      if (fd_->stucking_next_pos_count_ > 8) {
+        RCLCPP_ERROR(node_->get_logger(), "stucking_next_pos_count_ = %d",
+            fd_->stucking_next_pos_count_);
+      }
     }
     else
       fd_->stucking_next_pos_count_ = 0;
 
     // Mark frontier as dormant if stuck too long with same target
     if (fd_->stucking_next_pos_count_ >= FSMConstants::MAX_STUCKING_NEXT_POS_COUNT) {
-      ROS_ERROR("Set dormant frontier.");
+      RCLCPP_ERROR(node_->get_logger(), "Set dormant frontier.");
       fd_->stucking_action_count_ = 0;
       fd_->stucking_next_pos_count_ = 0;
       expl_manager_->frontier_map2d_->setForceDormantFrontier(end_pos);
@@ -330,15 +347,17 @@ int ExplorationFSM::callActionPlanner()
   // Track consecutive stuck actions globally
   if ((current_pos - last_pos).norm() < stucking_distance) {
     fd_->stucking_action_count_++;
-    ROS_ERROR_COND(fd_->stucking_action_count_ > 15, "Stucking action count = %d",
-        fd_->stucking_action_count_);
+    if (fd_->stucking_action_count_ > 15) {
+      RCLCPP_ERROR(node_->get_logger(), "Stucking action count = %d",
+          fd_->stucking_action_count_);
+    }
   }
   else
     fd_->stucking_action_count_ = 0;
 
   // If stuck for too long globally, terminate episode
   if (fd_->stucking_action_count_ >= FSMConstants::MAX_STUCKING_COUNT) {
-    ROS_ERROR("Stuck for too long, stopping episode.");
+    RCLCPP_ERROR(node_->get_logger(), "Stuck for too long, stopping episode.");
     final_res = FINAL_RESULT::STUCKING;
     return final_res;
   }
@@ -529,16 +548,6 @@ void ExplorationFSM::visualize()
   last_dftr2d_num = ed_ptr->dormant_frontiers_.size();
 
   // Draw object
-  // static int last_obj_num = 0;
-  // for (int i = 0; i < (int)ed_ptr->objects_.size(); ++i) {
-  //   visualization_->drawCubes(vec2dTo3d(ed_ptr->objects_[i]), fp_->vis_scale_,
-  //       visualization_->getColor(double(i) / ed_ptr->objects_.size(), 1.0), "object", i, 4);
-  // }
-  // for (int i = ed_ptr->objects_.size(); i < last_obj_num; ++i) {
-  //   visualization_->drawCubes({}, fp_->vis_scale_, Vector4d(0, 0, 0, 1), "object", i, 4);
-  // }
-  // last_obj_num = ed_ptr->objects_.size();
-
   static int last_obj_num = 0;
   for (int i = 0; i < (int)ed_ptr->objects_.size(); ++i) {
     int label = ed_ptr->object_labels_[i];
@@ -598,17 +607,17 @@ bool ExplorationFSM::updateFrontierAndObject()
 }
 
 // Receive Habitat state messages
-void ExplorationFSM::habitatStateCallback(const std_msgs::Int32ConstPtr& msg)
+void ExplorationFSM::habitatStateCallback(const std_msgs::msg::Int32::SharedPtr msg)
 {
   if (msg->data == HABITAT_STATE::ACTION_FINISH && state_ == ROS_STATE::WAIT_ACTION_FINISH)
     transitState(PLAN_ACTION, "Habitat Finish Action");
   if (msg->data == HABITAT_STATE::EPISODE_FINISH)
-    init(nh_);
+    init(node_);
   return;
 }
 
 // Periodically update frontiers and visualize in idle states
-void ExplorationFSM::frontierCallback(const ros::TimerEvent& e)
+void ExplorationFSM::frontierCallback()
 {
   if (state_ != ROS_STATE::WAIT_TRIGGER && state_ != ROS_STATE::FINISH)
     return;
@@ -618,17 +627,17 @@ void ExplorationFSM::frontierCallback(const ros::TimerEvent& e)
 }
 
 // Receive user trigger to start exploration
-void ExplorationFSM::triggerCallback(const geometry_msgs::PoseStampedConstPtr& msg)
+void ExplorationFSM::triggerCallback(const geometry_msgs::msg::PoseStamped::SharedPtr msg)
 {
   if (state_ != ROS_STATE::WAIT_TRIGGER)
     return;
   fd_->trigger_ = true;
-  cout << "Triggered!" << endl;
+  std::cout << "Triggered!" << std::endl;
   transitState(PLAN_ACTION, "triggerCallback");
 }
 
 // Receive robot odometry and update traveled path + marker
-void ExplorationFSM::odometryCallback(const nav_msgs::OdometryConstPtr& msg)
+void ExplorationFSM::odometryCallback(const nav_msgs::msg::Odometry::SharedPtr msg)
 {
   fd_->odom_pos_(0) = msg->pose.pose.position.x;
   fd_->odom_pos_(1) = msg->pose.pose.position.y;
@@ -659,13 +668,13 @@ void ExplorationFSM::publishRobotMarker()
   const double robot_radius = FSMConstants::ROBOT_RADIUS;
 
   // Create robot body cylinder marker
-  visualization_msgs::Marker robot_marker;
+  visualization_msgs::msg::Marker robot_marker;
   robot_marker.header.frame_id = "world";
-  robot_marker.header.stamp = ros::Time::now();
+  robot_marker.header.stamp = node_->get_clock()->now();
   robot_marker.ns = "robot_position";
   robot_marker.id = 0;
-  robot_marker.type = visualization_msgs::Marker::CYLINDER;
-  robot_marker.action = visualization_msgs::Marker::ADD;
+  robot_marker.type = visualization_msgs::msg::Marker::CYLINDER;
+  robot_marker.action = visualization_msgs::msg::Marker::ADD;
 
   // Set cylinder position
   robot_marker.pose.position.x = fd_->odom_pos_(0);
@@ -690,13 +699,13 @@ void ExplorationFSM::publishRobotMarker()
   robot_marker.color.a = 1.0;
 
   // Create direction arrow marker
-  visualization_msgs::Marker arrow_marker;
+  visualization_msgs::msg::Marker arrow_marker;
   arrow_marker.header.frame_id = "world";
-  arrow_marker.header.stamp = ros::Time::now();
+  arrow_marker.header.stamp = node_->get_clock()->now();
   arrow_marker.ns = "robot_direction";
   arrow_marker.id = 1;
-  arrow_marker.type = visualization_msgs::Marker::ARROW;
-  arrow_marker.action = visualization_msgs::Marker::ADD;
+  arrow_marker.type = visualization_msgs::msg::Marker::ARROW;
+  arrow_marker.action = visualization_msgs::msg::Marker::ADD;
 
   // Set arrow position
   arrow_marker.pose.position.x = fd_->odom_pos_(0);
@@ -721,11 +730,11 @@ void ExplorationFSM::publishRobotMarker()
   arrow_marker.color.a = 1.0;
 
   // Publish both markers
-  robot_marker_pub_.publish(robot_marker);
-  robot_marker_pub_.publish(arrow_marker);
+  robot_marker_pub_->publish(robot_marker);
+  robot_marker_pub_->publish(arrow_marker);
 }
 
-void ExplorationFSM::confidenceThresholdCallback(const std_msgs::Float64ConstPtr& msg)
+void ExplorationFSM::confidenceThresholdCallback(const std_msgs::msg::Float64::SharedPtr msg)
 {
   if (fd_->have_confidence_)
     return;
@@ -738,8 +747,8 @@ void ExplorationFSM::transitState(ROS_STATE new_state, string pos_call)
 {
   int pre_s = int(state_);
   state_ = new_state;
-  cout << "[ " + pos_call + "]: from " + fd_->state_str_[pre_s] + " to " +
+  std::cout << "[ " + pos_call + "]: from " + fd_->state_str_[pre_s] + " to " +
               fd_->state_str_[int(new_state)]
-       << endl;
+       << std::endl;
 }
 }  // namespace apexnav_planner

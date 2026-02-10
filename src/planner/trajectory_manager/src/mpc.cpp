@@ -2,21 +2,46 @@
 
 using namespace std;
 
-void MPC::init(ros::NodeHandle& nh)
+void MPC::init(rclcpp::Node::SharedPtr node)
 {
-  nh.param("mpc/du_threshold", du_th, -1.0);
-  nh.param("mpc/dt", dt, -1.0);
-  nh.param("mpc/max_iter", max_iter, -1);
-  nh.param("mpc/predict_steps", T, -1);
-  nh.param("mpc/delay_num", delay_num, -1);
-  nh.param("max_correction_vel", max_speed, -1.0);
-  nh.param("max_correction_omega", max_omega, -1.0);
+  node_ = node;
+
+  // Declare and get parameters
+  if (!node_->has_parameter("mpc.du_threshold")) {
+    node_->declare_parameter("mpc.du_threshold", -1.0);
+  }
+  if (!node_->has_parameter("mpc.max_iter")) {
+    node_->declare_parameter("mpc.max_iter", -1);
+  }
+  if (!node_->has_parameter("mpc.delay_num")) {
+    node_->declare_parameter("mpc.delay_num", -1);
+  }
+  if (!node_->has_parameter("mpc.tolerance")) {
+    node_->declare_parameter("mpc.tolerance", 0.1);
+  }
+  if (!node_->has_parameter("mpc.matrix_q")) {
+    node_->declare_parameter("mpc.matrix_q", std::vector<double>());
+  }
+  if (!node_->has_parameter("mpc.matrix_r")) {
+    node_->declare_parameter("mpc.matrix_r", std::vector<double>());
+  }
+  if (!node_->has_parameter("mpc.matrix_rd")) {
+    node_->declare_parameter("mpc.matrix_rd", std::vector<double>());
+  }
+
+  du_th = node_->get_parameter("mpc.du_threshold").as_double();
+  dt = node_->get_parameter("mpc.dt").as_double();
+  max_iter = node_->get_parameter("mpc.max_iter").as_int();
+  T = node_->get_parameter("mpc.predict_steps").as_int();
+  delay_num = node_->get_parameter("mpc.delay_num").as_int();
+  max_speed = node_->get_parameter("max_correction_vel").as_double();
+  max_omega = node_->get_parameter("max_correction_omega").as_double();
   min_speed = 0.0;
   max_accel = max_speed;
-  nh.param("mpc/tolerance", tolerance, 0.1);
-  nh.param<std::vector<double>>("mpc/matrix_q", Q, std::vector<double>());
-  nh.param<std::vector<double>>("mpc/matrix_r", R, std::vector<double>());
-  nh.param<std::vector<double>>("mpc/matrix_rd", Rd, std::vector<double>());
+  tolerance = node_->get_parameter("mpc.tolerance").as_double();
+  Q = node_->get_parameter("mpc.matrix_q").as_double_array();
+  R = node_->get_parameter("mpc.matrix_r").as_double_array();
+  Rd = node_->get_parameter("mpc.matrix_rd").as_double_array();
 
   has_odom = false;
   receive_traj_ = false;
@@ -26,9 +51,9 @@ void MPC::init(ros::NodeHandle& nh)
   last_output = output = dref = Eigen::Matrix<double, 2, 500>::Zero(2, 500);
   for (int i = 0; i < delay_num; i++) output_buff.push_back(Eigen::Vector2d::Zero());
 
-  predict_pub = nh.advertise<visualization_msgs::Marker>("mpc_car/predict_path", 10);
-  ref_pub = nh.advertise<visualization_msgs::Marker>("mpc_car/reference_path", 10);
-  err_pub = nh.advertise<std_msgs::Float64>("mpc_car/track_err", 10);
+  predict_pub_ = node_->create_publisher<visualization_msgs::msg::Marker>("mpc_car/predict_path", 10);
+  ref_pub_ = node_->create_publisher<visualization_msgs::msg::Marker>("mpc_car/reference_path", 10);
+  err_pub_ = node_->create_publisher<std_msgs::msg::Float64>("mpc_car/track_err", 10);
 }
 
 void MPC::setOdom(const Eigen::Vector4d& car_state)
@@ -42,9 +67,9 @@ void MPC::setOdom(const Eigen::Vector4d& car_state)
 
 Eigen::Vector2d MPC::calCmd(const std::vector<Eigen::Vector3d>& _xref)
 {
-  std_msgs::Float64 err;
+  std_msgs::msg::Float64 err;
   err.data = Eigen::Vector2d(now_state.x - _xref[0](0), now_state.y - _xref[0](1)).norm();
-  err_pub.publish(err);
+  err_pub_->publish(err);
   for (int i = 0; i < T; i++) {
     xref(0, i) = _xref[i](0);
     xref(1, i) = _xref[i](1);
@@ -350,7 +375,7 @@ void MPC::solveMPCV()
 
   // get the controller input
   QPSolution = solver.getSolution();
-  // ROS_INFO("Solution: v0=%f     omega0=%f", QPSolution[dimx], QPSolution[dimx+1]);
+  // RCLCPP_INFO(node_->get_logger(), "Solution: v0=%f     omega0=%f", QPSolution[dimx], QPSolution[dimx+1]);
   for (int i = 0; i < delay_num; i++) {
     output(0, i) = output_buff[i][0];
     output(1, i) = output_buff[i][1];
@@ -364,7 +389,7 @@ void MPC::solveMPCV()
 void MPC::getCmd()
 {
   int iter;
-  ros::Time begin = ros::Time::now();
+  auto begin = std::chrono::steady_clock::now();
   for (iter = 0; iter < max_iter; iter++) {
     predictMotion();
     last_output = output;
@@ -374,12 +399,14 @@ void MPC::getCmd()
       du = du + fabs(output(0, i) - last_output(0, i)) + fabs(output(1, i) - last_output(1, i));
     }
     // break;
-    if (du <= du_th || (ros::Time::now() - begin).toSec() > 0.01) {
+    auto now = std::chrono::steady_clock::now();
+    double elapsed = std::chrono::duration<double>(now - begin).count();
+    if (du <= du_th || elapsed > 0.01) {
       break;
     }
   }
   if (iter == max_iter) {
-    ROS_WARN("MPC Iterative is max iter");
+    RCLCPP_WARN(node_->get_logger(), "MPC Iterative is max iter");
   }
 
   predictMotion(xopt);

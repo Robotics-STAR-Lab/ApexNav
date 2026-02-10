@@ -14,7 +14,7 @@
 #include <unordered_map>
 
 namespace apexnav_planner {
-FrontierMap2D::FrontierMap2D(const SDFMap2D::Ptr& sdf_map, ros::NodeHandle& nh)
+FrontierMap2D::FrontierMap2D(const SDFMap2D::Ptr& sdf_map, rclcpp::Node::SharedPtr node)
 {
   // Initialize core mapping infrastructure
   this->sdf_map_ = sdf_map;
@@ -24,11 +24,24 @@ FrontierMap2D::FrontierMap2D(const SDFMap2D::Ptr& sdf_map, ros::NodeHandle& nh)
   frontier_flag_ = vector<char>(voxel_num, NONE);
   fill(frontier_flag_.begin(), frontier_flag_.end(), NONE);
 
-  // Load exploration parameters from ROS parameter server
-  nh.param("frontier/cluster_min", cluster_min_, -1);
-  nh.param("frontier/cluster_size_xy", cluster_size_xy_, -1.0);
-  nh.param("frontier/min_contain_unknown", min_contain_unknown_, 50);
-  nh.param("frontier/min_view_finish_fraction", min_view_finish_fraction_, -1.0);
+  // Load exploration parameters from ROS2 parameter server
+  if (!node->has_parameter("frontier.cluster_min")) {
+    node->declare_parameter("frontier.cluster_min", -1);
+  }
+  if (!node->has_parameter("frontier.cluster_size_xy")) {
+    node->declare_parameter("frontier.cluster_size_xy", -1.0);
+  }
+  if (!node->has_parameter("frontier.min_contain_unknown")) {
+    node->declare_parameter("frontier.min_contain_unknown", 50);
+  }
+  if (!node->has_parameter("frontier.min_view_finish_fraction")) {
+    node->declare_parameter("frontier.min_view_finish_fraction", -1.0);
+  }
+
+  node->get_parameter("frontier.cluster_min", cluster_min_);
+  node->get_parameter("frontier.cluster_size_xy", cluster_size_xy_);
+  node->get_parameter("frontier.min_contain_unknown", min_contain_unknown_);
+  node->get_parameter("frontier.min_view_finish_fraction", min_view_finish_fraction_);
 
   // Initialize ray-casting system for visibility analysis
   raycaster_.reset(new RayCaster2D);
@@ -38,7 +51,7 @@ FrontierMap2D::FrontierMap2D(const SDFMap2D::Ptr& sdf_map, ros::NodeHandle& nh)
   raycaster_->setParams(resolution_, origin);
 
   // Setup perception utilities for sensor integration
-  percep_utils_.reset(new PerceptionUtils2D(nh));
+  percep_utils_.reset(new PerceptionUtils2D(node));
 }
 
 void FrontierMap2D::searchFrontiers()

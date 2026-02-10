@@ -1,5 +1,6 @@
 #include <path_searching/astar2d.h>
 #include <sstream>
+#include <chrono>
 
 using namespace std;
 using namespace Eigen;
@@ -10,10 +11,16 @@ Astar2D::~Astar2D()
   for (int i = 0; i < allocate_num_; i++) delete path_node_pool_[i];
 }
 
-void Astar2D::init(ros::NodeHandle& nh, const SDFMap2D::Ptr& sdf_map)
+void Astar2D::init(rclcpp::Node::SharedPtr node, const SDFMap2D::Ptr& sdf_map)
 {
-  nh.param("astar/resolution_astar", resolution_, -1.0);
-  nh.param("astar/lambda_heu", lambda_heu_, -1.0);
+  if (!node->has_parameter("astar.resolution_astar")) {
+    node->declare_parameter("astar.resolution_astar", -1.0);
+  }
+  if (!node->has_parameter("astar.lambda_heu")) {
+    node->declare_parameter("astar.lambda_heu", -1.0);
+  }
+  node->get_parameter("astar.resolution_astar", resolution_);
+  node->get_parameter("astar.lambda_heu", lambda_heu_);
   allocate_num_ = 1000000;
 
   this->sdf_map_ = sdf_map;
@@ -69,7 +76,7 @@ int Astar2D::astarSearch(const Eigen::Vector2d& start_pt, const Eigen::Vector2d&
   open_set_map_.insert(make_pair(cur_node->index, cur_node));
   use_node_num_ += 1;
 
-  const auto t1 = ros::Time::now();
+  const auto t1 = std::chrono::steady_clock::now();
 
   /* ---------- search loop ---------- */
   while (!open_set_.empty()) {
@@ -84,7 +91,8 @@ int Astar2D::astarSearch(const Eigen::Vector2d& start_pt, const Eigen::Vector2d&
     }
 
     // Early termination if time up
-    if ((ros::Time::now() - t1).toSec() > max_time) {
+    auto elapsed = std::chrono::duration<double>(std::chrono::steady_clock::now() - t1).count();
+    if (elapsed > max_time) {
       early_terminate_cost_ = cur_node->g_score + getDiagHeu(cur_node->position, end_pt);
       // ROS_WARN("Astar Long Time");
       return NO_PATH;

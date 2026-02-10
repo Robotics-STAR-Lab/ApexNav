@@ -3,12 +3,14 @@
 
 import os
 import sys
-import rospy
+import rclpy
+from rclpy.node import Node
+from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
 import numpy as np
 import time
 from cv_bridge import CvBridge
 import message_filters
-import tf.transformations as tft
+from tf_transformations import euler_from_quaternion
 
 import hydra
 from omegaconf import DictConfig
@@ -41,7 +43,7 @@ def inverse_habitat_publisher_transform(sensor_pose_msg):
     gps = np.array([-pos.y, pos.z - 0.88, -pos.x], dtype=np.float32)
 
     # Invert orientation transform:
-    euler = tft.euler_from_quaternion([orn.x, orn.y, orn.z, orn.w])
+    euler = euler_from_quaternion([orn.x, orn.y, orn.z, orn.w])
     compass_scalar = euler[2] + np.pi / 2.0
     # Habitat compass is a single-element array
     compass = np.array([compass_scalar], dtype=np.float32)
@@ -49,36 +51,41 @@ def inverse_habitat_publisher_transform(sensor_pose_msg):
     return gps, compass
 
 
-class RealWorldNode:
+class RealWorldNode(Node):
     def __init__(self, cfg):
+        super().__init__('real_world_node')
         self.config = cfg
-
-        rospy.init_node("real_world_node", anonymous=False)
 
         self.bridge = CvBridge()
 
-        # Configure subscribers
-        self.rgb_sub_ = message_filters.Subscriber("/habitat/camera_rgb", Image)
-        self.depth_sub_ = message_filters.Subscriber("/habitat/camera_depth", Image)
-        self.sensor_pose_sub_ = message_filters.Subscriber(
-            "/habitat/sensor_pose", Odometry
+        # QoS profile
+        qos = QoSProfile(
+            reliability=ReliabilityPolicy.RELIABLE,
+            history=HistoryPolicy.KEEP_LAST,
+            depth=10
         )
 
-        rospy.Subscriber("/habitat/odom", Odometry, self.odom_callback, queue_size=10)
+        # Configure subscribers using message_filters with BEST_EFFORT QoS
+        best_effort_qos = QoSProfile(
+            reliability=ReliabilityPolicy.BEST_EFFORT,
+            history=HistoryPolicy.KEEP_LAST,
+            depth=10
+        )
+        self.rgb_sub_ = message_filters.Subscriber(self, Image, "/habitat/camera_rgb", qos_profile=best_effort_qos)
+        self.depth_sub_ = message_filters.Subscriber(self, Image, "/habitat/camera_depth", qos_profile=best_effort_qos)
+        self.sensor_pose_sub_ = message_filters.Subscriber(self, Odometry, "/habitat/sensor_pose", qos_profile=best_effort_qos)
+
+        self.create_subscription(Odometry, "/habitat/odom", self.odom_callback, qos)
 
         # Configure publishers
-        self.confidence_threshold_pub_ = rospy.Publisher(
-            "/detector/confidence_threshold", Float64, queue_size=10
-        )
-        self.itm_score_pub_ = rospy.Publisher(
-            "/blip2/cosine_score", Float64, queue_size=10
-        )
-        self.cld_with_score_pub_ = rospy.Publisher(
-            "/detector/clouds_with_scores", MultipleMasksWithConfidence, queue_size=10
-        )
-        self.detect_img_pub_ = rospy.Publisher(
-            "/detector/detect_img", Image, queue_size=10
-        )
+        self.confidence_threshold_pub_ = self.create_publisher(
+            Float64, "/detector/confidence_threshold", qos)
+        self.itm_score_pub_ = self.create_publisher(
+            Float64, "/blip2/cosine_score", qos)
+        self.cld_with_score_pub_ = self.create_publisher(
+            MultipleMasksWithConfidence, "/detector/clouds_with_scores", qos)
+        self.detect_img_pub_ = self.create_publisher(
+            Image, "/detector/detect_img", qos)
 
         # Initialize detector
         # Synchronize RGB, depth and sensor_pose topics
@@ -121,9 +128,9 @@ class RealWorldNode:
         self.fusion_score = 0.0
 
         # Subscribe to label topic (published by `habitat_trajectory_test.py`)
-        rospy.Subscriber("/detector/label", String, self.label_callback, queue_size=1)
+        self.create_subscription(String, "/detector/label", self.label_callback, 1)
 
-        rospy.Timer(rospy.Duration(1.0), self.publish_confidence_threshold)
+        self.create_timer(1.0, self.publish_confidence_threshold)
 
     def sync_detect_callback(self, rgb_msg, depth_msg, sensor_pose_msg):
         # If a detect run is already in progress, skip this invocation.
@@ -131,9 +138,9 @@ class RealWorldNode:
             return
         self.processing_detect = True
         try:
-            # rospy.loginfo("detect: Received synchronized RGB and depth images")
             stamp = rgb_msg.header.stamp
-            time_diff = abs((stamp - sensor_pose_msg.header.stamp).to_sec())
+            time_diff = abs((stamp.sec + stamp.nanosec * 1e-9) -
+                          (sensor_pose_msg.header.stamp.sec + sensor_pose_msg.header.stamp.nanosec * 1e-9))
             if time_diff > 0.1:
                 # If timestamps differ significantly, skip this pair
                 # and allow the next synchronized callback to run.
@@ -150,12 +157,11 @@ class RealWorldNode:
             cld_with_score_msg.point_clouds = []
             cld_with_score_msg.confidence_scores = []
             cld_with_score_msg.label_indices = []
-            rospy.loginfo("detect: label: %s", self.label)
-            # rospy.loginfo("detect: room: %s", self.room)
+            self.get_logger().info(f"detect: label: {self.label}")
 
             # If label not yet received, skip detection until available
             if self.label is None:
-                rospy.logwarn_throttle(5.0, "Waiting for target label on /detector/label")
+                self.get_logger().warn("Waiting for target label on /detector/label")
                 return
 
             detect_img, score_list, object_masks_list, label_list = get_object(
@@ -172,7 +178,7 @@ class RealWorldNode:
             }
 
             obj_point_cloud_list = get_object_point_cloud(
-                self.config, observations, object_masks_list
+                self.config, observations, object_masks_list, self
             )
             cld_with_score_msg.point_clouds = obj_point_cloud_list
             cld_with_score_msg.confidence_scores = score_list
@@ -185,7 +191,7 @@ class RealWorldNode:
             # Also publish the detected object clouds with scores so other nodes / RViz can use them
             self.cld_with_score_pub_.publish(cld_with_score_msg)
         except Exception as e:
-            rospy.logerr("detect: Error in synchronized processing: %s", e)
+            self.get_logger().error(f"detect: Error in synchronized processing: {e}")
         finally:
             # mark processing complete so next invocation can proceed
             self.processing_detect = False
@@ -197,21 +203,21 @@ class RealWorldNode:
         self.processing_value = True
         try:
             stamp = rgb_msg.header.stamp
-            time_diff = abs((stamp - sensor_pose_msg.header.stamp).to_sec())
+            time_diff = abs((stamp.sec + stamp.nanosec * 1e-9) -
+                          (sensor_pose_msg.header.stamp.sec + sensor_pose_msg.header.stamp.nanosec * 1e-9))
             if time_diff > 0.1:
                 # If timestamps differ significantly, skip this pair
                 return
 
             rgb_cv = self.bridge.imgmsg_to_cv2(rgb_msg, desired_encoding="rgb8")
-            # rospy.loginfo("value: room: %s", self.room)
 
             cosine = get_itm_message_cosine(rgb_cv, self.label, self.room)
-            rospy.loginfo("value: Computed cosine score: %.3f", cosine)
+            self.get_logger().info(f"value: Computed cosine score: {cosine:.3f}")
             itm_score_msg = Float64()
-            itm_score_msg.data = cosine
+            itm_score_msg.data = float(cosine)
             self.itm_score_pub_.publish(itm_score_msg)
         except Exception as e:
-            rospy.logerr("value: Error in synchronized processing: %s", e)
+            self.get_logger().error(f"value: Error in synchronized processing: {e}")
         finally:
             self.processing_value = False
 
@@ -222,7 +228,7 @@ class RealWorldNode:
             if new_label == self.label:
                 return
             self.label = new_label
-            rospy.loginfo("Received target label: %s", self.label)
+            self.get_logger().info(f"Received target label: {self.label}")
             # If LLM is configured, fetch LLM answer for the new label
             try:
                 self.llm_answer, self.room, self.fusion_score = read_answer(
@@ -234,33 +240,37 @@ class RealWorldNode:
                 self.room = None
                 self.fusion_score = 0.0
         except Exception as e:
-            rospy.logerr("label_callback: Error processing label message: %s", e)
+            self.get_logger().error(f"label_callback: Error processing label message: {e}")
 
     def odom_callback(self, msg):
         try:
             self.robot_odom = msg
             self.odom_stamp = msg.header.stamp
             if self.odom_stamp is not None:
-                # self.publish_sensor_pose()
                 self.odom_stamp = None
-            # rospy.loginfo("odom: Received Odometry")
         except Exception as e:
-            rospy.logerr("odom: Error processing Odometry: %s", e)
+            self.get_logger().error(f"odom: Error processing Odometry: {e}")
 
-    def publish_confidence_threshold(self, event):
+    def publish_confidence_threshold(self):
         confidence_threshold_msg = Float64()
         confidence_threshold_msg.data = 0.5
         self.confidence_threshold_pub_.publish(confidence_threshold_msg)
 
     def run(self):
-        rospy.loginfo("RealWorldNode running. Waiting for sensor messages...")
-        rospy.spin()
+        self.get_logger().info("RealWorldNode running. Waiting for sensor messages...")
+        rclpy.spin(self)
 
 
 @hydra.main(version_base=None, config_path="config", config_name="real_world_test")
 def main(cfg: DictConfig):
-    node = RealWorldNode(cfg)
-    node.run()
+    rclpy.init()
+    try:
+        node = RealWorldNode(cfg)
+        node.run()
+    except Exception as e:
+        print(f"Error: {e}")
+    finally:
+        rclpy.shutdown()
 
 
 if __name__ == "__main__":

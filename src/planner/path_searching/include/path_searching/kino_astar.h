@@ -10,17 +10,19 @@
 #include <ompl/geometric/SimpleSetup.h>
 
 #include <pcl_conversions/pcl_conversions.h>
-#include <sensor_msgs/PointCloud2.h>
+#include <sensor_msgs/msg/point_cloud2.hpp>
 #include <unordered_map>
 #include <boost/functional/hash.hpp>
 #include <queue>
 #include <algorithm>
 
-#include "geometry_msgs/PoseStamped.h"
-#include "nav_msgs/Path.h"
-#include "visualization_msgs/MarkerArray.h"
-#include "visualization_msgs/Marker.h"
-#include "tf/transform_datatypes.h"
+#include <rclcpp/rclcpp.hpp>
+#include <geometry_msgs/msg/pose_stamped.hpp>
+#include <nav_msgs/msg/path.hpp>
+#include <visualization_msgs/msg/marker_array.hpp>
+#include <visualization_msgs/msg/marker.hpp>
+#include <tf2/LinearMath/Quaternion.h>
+#include <tf2/LinearMath/Matrix3x3.h>
 
 #define inf 1 >> 30
 
@@ -92,9 +94,9 @@ namespace apexnav_planner {
 class KinoAstar {
 public:
   enum { REACH_HORIZON = 1, REACH_END = 2, NO_PATH = 3, REACH_END_BUT_SHOT_FAILS = 4 };
-  KinoAstar(ros::NodeHandle nh, const SDFMap2D::Ptr& map)
+  KinoAstar(rclcpp::Node::SharedPtr node, const SDFMap2D::Ptr& map)
   {
-    nh_ = nh;
+    node_ = node;
     this->map_ = map;
     start_state_.resize(5);
     end_state_.resize(5);
@@ -155,10 +157,11 @@ private:
   void nodeVis(const Eigen::Vector3d& state);
   double normalizeAngle(const double& angle);
 
-  ros::NodeHandle nh_;
+  rclcpp::Node::SharedPtr node_;
 
-  ros::Publisher expandNodes_pub_;
-  ros::Publisher kinoastarFlatPathPub_, kinoastarFlatTrajPub_;
+  rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr expandNodes_pub_;
+  rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr kinoastarFlatPathPub_;
+  rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr kinoastarFlatTrajPub_;
 
   std::vector<PathNodePtr> path_node_pool_;
   NodeHashTable<PathNodePtr> expanded_nodes_;

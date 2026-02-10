@@ -2,12 +2,25 @@
 
 namespace apexnav_planner {
 
-PerceptionUtils2D::PerceptionUtils2D(ros::NodeHandle& nh)
+PerceptionUtils2D::PerceptionUtils2D(rclcpp::Node::SharedPtr node)
 {
-  nh.param("perception_utils/left_angle", left_angle_, -1.0);
-  nh.param("perception_utils/right_angle", right_angle_, -1.0);
-  nh.param("perception_utils/max_dist", max_dist_, -1.0);
-  nh.param("perception_utils/vis_dist", vis_dist_, -1.0);
+  if (!node->has_parameter("perception_utils.left_angle")) {
+    node->declare_parameter("perception_utils.left_angle", -1.0);
+  }
+  if (!node->has_parameter("perception_utils.right_angle")) {
+    node->declare_parameter("perception_utils.right_angle", -1.0);
+  }
+  if (!node->has_parameter("perception_utils.max_dist")) {
+    node->declare_parameter("perception_utils.max_dist", -1.0);
+  }
+  if (!node->has_parameter("perception_utils.vis_dist")) {
+    node->declare_parameter("perception_utils.vis_dist", -1.0);
+  }
+
+  node->get_parameter("perception_utils.left_angle", left_angle_);
+  node->get_parameter("perception_utils.right_angle", right_angle_);
+  node->get_parameter("perception_utils.max_dist", max_dist_);
+  node->get_parameter("perception_utils.vis_dist", vis_dist_);
 
   // Initialize FOV normal vectors (based on +X direction)
   n_left_ << cos(M_PI_2 - left_angle_), sin(M_PI_2 - left_angle_);

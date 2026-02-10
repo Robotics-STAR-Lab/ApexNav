@@ -13,8 +13,11 @@
 #include <memory>
 #include <vector>
 
-// ROS core
-#include <ros/ros.h>
+// ROS2 core
+#include <rclcpp/rclcpp.hpp>
+
+// LKH MTSP solver service
+#include <lkh_mtsp_solver/srv/solve_mtsp.hpp>
 
 // Plan environment
 #include <plan_env/frontier_map2d.h>
@@ -71,7 +74,7 @@ public:
   ExplorationManager() = default;
   ~ExplorationManager();  // Explicit destructor declaration for shared_ptr with forward declaration
 
-  void initialize(ros::NodeHandle& nh);
+  void initialize(rclcpp::Node::SharedPtr node);
 
   int planNextBestPoint(const Vector3d& pos, const double& yaw);
   bool planTrajectory(const Eigen::VectorXd& start, const Eigen::VectorXd& end, const Vector3d& ctrl);
@@ -92,6 +95,8 @@ public:
   typedef shared_ptr<ExplorationManager> Ptr;
 
 private:
+  rclcpp::Node::SharedPtr node_;
+
   // Exploration Policy
   void chooseExplorationPolicy(Vector2d cur_pos, vector<Vector2d> frontiers,
       Vector2d& next_best_pos, vector<Vector2d>& next_best_path);
@@ -130,7 +135,8 @@ private:
   double computePathCost(const Vector2d& pos1, const Vector2d& pos2);
   vector<Vector2i> allNeighbors(const Eigen::Vector2i& idx, int grid_radius);
 
-  ros::ServiceClient tsp_client_;         ///< ROS service client for TSP solver
+  rclcpp::Client<lkh_mtsp_solver::srv::SolveMTSP>::SharedPtr tsp_client_;  ///< ROS2 service client for TSP solver
+  rclcpp::CallbackGroup::SharedPtr tsp_cb_group_;  ///< Separate callback group for TSP client
   unique_ptr<RayCaster2D> ray_caster2d_;  ///< Ray casting for collision checking
 };
 
@@ -168,7 +174,7 @@ inline bool ExplorationManager::searchObjectPathExtreme(const Vector3d& start,
 inline void ExplorationManager::shortenPath(vector<Vector2d>& path)
 {
   if (path.empty()) {
-    ROS_ERROR("Empty path to shorten");
+    RCLCPP_ERROR(node_->get_logger(), "Empty path to shorten");
     return;
   }
 
@@ -183,7 +189,7 @@ inline void ExplorationManager::shortenPath(vector<Vector2d>& path)
       // Add waypoints only when necessary to avoid collision
       ray_caster2d_->input(short_tour.back(), path[i + 1]);
       Eigen::Vector2i idx;
-      while (ray_caster2d_->nextId(idx) && ros::ok()) {
+      while (ray_caster2d_->nextId(idx) && rclcpp::ok()) {
         if (sdf_map_->getInflateOccupancy(idx) == 1 ||
             sdf_map_->getOccupancy(idx) == SDFMap2D::UNKNOWN) {
           short_tour.push_back(path[i]);

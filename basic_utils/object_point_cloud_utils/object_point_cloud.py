@@ -3,7 +3,7 @@ import numpy as np
 import math
 
 from sensor_msgs.msg import PointCloud2, PointField
-import rospy
+from builtin_interfaces.msg import Time
 
 from basic_utils.object_point_cloud_utils.geometry_utils import (
     get_point_cloud,
@@ -13,18 +13,28 @@ from basic_utils.object_point_cloud_utils.geometry_utils import (
 )
 
 
-def get_object_point_cloud(cfg, observations, object_masks_list):
+def get_current_time_msg(node=None):
+    """Get current ROS2 time as a message"""
+    if node is not None:
+        return node.get_clock().now().to_msg()
+    else:
+        # Default time if no node is available
+        return Time(sec=0, nanosec=0)
+
+
+def get_object_point_cloud(cfg, observations, object_masks_list, node=None):
     """
     Extract 3D point clouds for detected objects from sensor observations
-    
+
     This function processes depth images and object masks to generate 3D point clouds
     for each detected object, transforming them from camera coordinates to world coordinates.
-    
+
     Args:
         cfg: Configuration object containing sensor parameters
         observations: Dictionary containing sensor data (depth, gps, compass)
         object_masks_list: List of binary masks for detected objects
-        
+        node: Optional ROS2 node for getting current time
+
     Returns:
         list: List of ROS PointCloud2 messages for each object
     """
@@ -64,7 +74,7 @@ def get_object_point_cloud(cfg, observations, object_masks_list):
         obj_point_cloud = np.concatenate(
             (obj_point_cloud, within_range[:, None]), axis=1
         )
-        pc2 = convert_to_pointcloud2(obj_point_cloud)
+        pc2 = convert_to_pointcloud2(obj_point_cloud, node)
         obj_point_cloud_list.append(pc2)
     return obj_point_cloud_list
 
@@ -79,13 +89,13 @@ def extract_object_cloud(
 ) -> np.ndarray:
     """
     Extract 3D point cloud from depth image using object mask
-    
+
     Args:
         depth: Depth image array
         object_mask: Binary mask indicating object pixels
         min_depth, max_depth: Depth sensor range limits
         fx, fy: Camera focal length parameters
-        
+
     Returns:
         np.ndarray: 3D point cloud in camera coordinates
     """
@@ -105,11 +115,11 @@ def extract_object_cloud(
 def get_random_subarray(points: np.ndarray, size: int) -> np.ndarray:
     """
     Randomly sample a subset of points from point cloud
-    
+
     Args:
         points: Input point cloud array
         size: Number of points to sample
-        
+
     Returns:
         np.ndarray: Randomly sampled subset of points
     """
@@ -119,13 +129,14 @@ def get_random_subarray(points: np.ndarray, size: int) -> np.ndarray:
     return points[indices]
 
 
-def convert_to_pointcloud2(obj_point_cloud):
+def convert_to_pointcloud2(obj_point_cloud, node=None):
     """
     Convert numpy point cloud to ROS PointCloud2 message
-    
+
     Args:
         obj_point_cloud: Numpy array of 3D points
-        
+        node: Optional ROS2 node for getting current time
+
     Returns:
         PointCloud2: ROS message containing the point cloud
     """
@@ -133,14 +144,14 @@ def convert_to_pointcloud2(obj_point_cloud):
 
     # Create PointCloud2 message
     pc2 = PointCloud2()
-    pc2.header.stamp = rospy.Time.now()
+    pc2.header.stamp = get_current_time_msg(node)
     pc2.header.frame_id = "world"
     pc2.height = 1
     pc2.width = obj_point_cloud.shape[0]
     pc2.fields = [
-        PointField("x", 0, PointField.FLOAT32, 1),
-        PointField("y", 4, PointField.FLOAT32, 1),
-        PointField("z", 8, PointField.FLOAT32, 1),
+        PointField(name="x", offset=0, datatype=PointField.FLOAT32, count=1),
+        PointField(name="y", offset=4, datatype=PointField.FLOAT32, count=1),
+        PointField(name="z", offset=8, datatype=PointField.FLOAT32, count=1),
     ]
     pc2.is_bigendian = False
     pc2.point_step = 16

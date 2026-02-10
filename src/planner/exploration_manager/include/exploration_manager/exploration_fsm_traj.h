@@ -8,19 +8,20 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <chrono>
 
-// ROS core
-#include <ros/ros.h>
+// ROS2 core
+#include <rclcpp/rclcpp.hpp>
 
-// ROS message types
-#include <geometry_msgs/PoseStamped.h>
-#include <geometry_msgs/PoseWithCovarianceStamped.h>
-#include <nav_msgs/Odometry.h>
-#include <std_msgs/Float64.h>
-#include <std_msgs/Int32.h>
-#include <std_msgs/Empty.h>
-#include <visualization_msgs/Marker.h>
-#include <trajectory_manager/PolyTraj.h>
+// ROS2 message types
+#include <geometry_msgs/msg/pose_stamped.hpp>
+#include <geometry_msgs/msg/pose_with_covariance_stamped.hpp>
+#include <nav_msgs/msg/odometry.hpp>
+#include <std_msgs/msg/float64.hpp>
+#include <std_msgs/msg/int32.hpp>
+#include <std_msgs/msg/empty.hpp>
+#include <visualization_msgs/msg/marker.hpp>
+#include <trajectory_manager/msg/poly_traj.hpp>
 
 namespace apexnav_planner {
 
@@ -54,7 +55,7 @@ constexpr double MIN_SAFE_DISTANCE = 0.15;
 // Counters / thresholds
 constexpr int MAX_STUCKING_COUNT = 25;
 constexpr int MAX_STUCKING_NEXT_POS_COUNT = 14;
-constexpr int MAX_REPLAN_FAILURES = 3;  // Max consecutive replan failures
+constexpr int MAX_REPLAN_FAILURES = 200;  // Max consecutive replan failures (~2s at 10ms interval)
 
 // Cost weights
 constexpr double TARGET_WEIGHT = 150.0;
@@ -107,7 +108,7 @@ enum class TrajPlannerResult {
 class ExplorationFSMReal {
 private:
   /* Planning Utils */
-  ros::NodeHandle nh_;
+  rclcpp::Node::SharedPtr node_;
   std::shared_ptr<FastPlannerManager> planner_manager_;
   std::shared_ptr<ExplorationManager> expl_manager_;
   std::shared_ptr<PlanningVisualization> visualization_;
@@ -116,28 +117,35 @@ private:
   std::shared_ptr<FSMData> fd_;
   RealFSM::State state_;
 
-  /* ROS Utils */
-  ros::NodeHandle node_;
-  ros::Timer exec_timer_, frontier_timer_, safety_timer_;
-  ros::Subscriber trigger_sub_, goal_sub_, odom_sub_, confidence_threshold_sub_;
-  ros::Subscriber traj_finish_sub_;  // TODO: Subscribe to trajectory execution status
-  
-  ros::Publisher ros_state_pub_, expl_state_pub_, expl_result_pub_;
-  ros::Publisher robot_marker_pub_;
-  
+  /* ROS2 Utils */
+  rclcpp::TimerBase::SharedPtr exec_timer_, frontier_timer_, safety_timer_;
+  rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr trigger_sub_;
+  rclcpp::Subscription<geometry_msgs::msg::PoseWithCovarianceStamped>::SharedPtr goal_sub_;
+  rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_sub_;
+  rclcpp::Subscription<std_msgs::msg::Float64>::SharedPtr confidence_threshold_sub_;
+  rclcpp::Subscription<std_msgs::msg::Empty>::SharedPtr traj_finish_sub_;
+  rclcpp::Subscription<std_msgs::msg::Int32>::SharedPtr habitat_state_sub_;
+
+  rclcpp::Publisher<std_msgs::msg::Int32>::SharedPtr ros_state_pub_;
+  rclcpp::Publisher<std_msgs::msg::Int32>::SharedPtr expl_state_pub_;
+  rclcpp::Publisher<std_msgs::msg::Int32>::SharedPtr expl_result_pub_;
+  rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr robot_marker_pub_;
+  rclcpp::Publisher<std_msgs::msg::Int32>::SharedPtr action_pub_;
+
   // Real-world specific: trajectory control publishers
-  ros::Publisher poly_traj_pub_;   // Publish polynomial trajectory
-  ros::Publisher stop_pub_;        // Emergency stop signal
-  
+  rclcpp::Publisher<trajectory_manager::msg::PolyTraj>::SharedPtr poly_traj_pub_;
+  rclcpp::Publisher<std_msgs::msg::Empty>::SharedPtr stop_pub_;
+
   /* Trajectory execution status */
   // Trajectory state is tracked in fd_->static_state_
+  int replan_fail_count_ = 0;
 
   /* Exploration Planner */
   TrajPlannerResult callTrajectoryPlanner();
-  void polyTraj2ROSMsg(const LocalTrajectory& local_traj, trajectory_manager::PolyTraj& poly_msg);
+  void polyTraj2ROSMsg(const LocalTrajectory& local_traj, trajectory_manager::msg::PolyTraj& poly_msg);
   void selectLocalTarget(const Eigen::Vector2d& current_pos, const std::vector<Eigen::Vector2d>& path,
       const double& local_distance, Eigen::Vector2d& target_pos, double& target_yaw);
-  
+
   // Safety and stuck detection
   void emergencyStop();
   bool checkNeedReplan();
@@ -152,21 +160,22 @@ private:
   void visualize();
   void clearVisMarker();
 
-  /* ROS callbacks */
-  void FSMCallback(const ros::TimerEvent& e);
-  void safetyCallback(const ros::TimerEvent& e);
-  void frontierCallback(const ros::TimerEvent& e);
-  void triggerCallback(const geometry_msgs::PoseStampedConstPtr& msg);
-  void goalCallback(const geometry_msgs::PoseWithCovarianceStamped::ConstPtr& msg);
-  void odometryCallback(const nav_msgs::OdometryConstPtr& msg);
-  void confidenceThresholdCallback(const std_msgs::Float64ConstPtr& msg);
-  void trajectoryFinishCallback(const std_msgs::EmptyConstPtr& msg);  // TODO: Define proper msg type
+  /* ROS2 callbacks */
+  void FSMCallback();
+  void safetyCallback();
+  void frontierCallback();
+  void triggerCallback(const geometry_msgs::msg::PoseStamped::SharedPtr msg);
+  void goalCallback(const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr msg);
+  void odometryCallback(const nav_msgs::msg::Odometry::SharedPtr msg);
+  void confidenceThresholdCallback(const std_msgs::msg::Float64::SharedPtr msg);
+  void trajectoryFinishCallback(const std_msgs::msg::Empty::SharedPtr msg);
+  void habitatStateCallback(const std_msgs::msg::Int32::SharedPtr msg);
 
 public:
   ExplorationFSMReal() = default;
   ~ExplorationFSMReal() = default;
 
-  void init(ros::NodeHandle& nh);
+  void init(rclcpp::Node::SharedPtr node);
 
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 };

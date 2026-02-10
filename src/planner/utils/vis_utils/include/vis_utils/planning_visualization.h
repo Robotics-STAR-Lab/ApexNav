@@ -4,9 +4,9 @@
 #include <Eigen/Eigen>
 #include <algorithm>
 #include <iostream>
-#include <ros/ros.h>
+#include <rclcpp/rclcpp.hpp>
 #include <vector>
-#include <visualization_msgs/Marker.h>
+#include <visualization_msgs/msg/marker.hpp>
 
 using std::string;
 using std::vector;
@@ -31,15 +31,15 @@ private:
 
   /* data */
   /* visib_pub is seperated from previous ones for different info */
-  ros::NodeHandle node;
-  ros::Publisher traj_pub_;       // 0
-  ros::Publisher topo_pub_;       // 1
-  ros::Publisher predict_pub_;    // 2
-  ros::Publisher visib_pub_;      // 3, visibility constraints
-  ros::Publisher frontier_pub_;   // 4, frontier searching
-  ros::Publisher yaw_pub_;        // 5, yaw trajectory
-  ros::Publisher viewpoint_pub_;  // 6, viewpoint planning
-  vector<ros::Publisher> pubs_;   //
+  rclcpp::Node::SharedPtr node_;
+  rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr traj_pub_;       // 0
+  rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr topo_pub_;       // 1
+  rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr predict_pub_;    // 2
+  rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr visib_pub_;      // 3, visibility constraints
+  rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr frontier_pub_;   // 4, frontier searching
+  rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr yaw_pub_;        // 5, yaw trajectory
+  rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr viewpoint_pub_;  // 6, viewpoint planning
+  vector<rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr> pubs_;   //
 
   int last_topo_path1_num_;
   int last_topo_path2_num_;
@@ -54,13 +54,13 @@ public:
   ~PlanningVisualization()
   {
   }
-  PlanningVisualization(ros::NodeHandle& nh);
+  PlanningVisualization(rclcpp::Node::SharedPtr node);
 
   // new interface
-  void fillBasicInfo(visualization_msgs::Marker& mk, const Eigen::Vector3d& scale,
+  void fillBasicInfo(visualization_msgs::msg::Marker& mk, const Eigen::Vector3d& scale,
       const Eigen::Vector4d& color, const string& ns, const int& id, const int& shape);
-  void fillGeometryInfo(visualization_msgs::Marker& mk, const vector<Eigen::Vector3d>& list);
-  void fillGeometryInfo(visualization_msgs::Marker& mk, const vector<Eigen::Vector3d>& list1,
+  void fillGeometryInfo(visualization_msgs::msg::Marker& mk, const vector<Eigen::Vector3d>& list);
+  void fillGeometryInfo(visualization_msgs::msg::Marker& mk, const vector<Eigen::Vector3d>& list1,
       const vector<Eigen::Vector3d>& list2);
 
   void drawSpheres(const vector<Eigen::Vector3d>& list, const double& scale,

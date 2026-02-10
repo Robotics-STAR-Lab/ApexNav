@@ -1,7 +1,7 @@
 #ifndef _SDF_MAP2D_H
 #define _SDF_MAP2D_H
 
-#include <ros/ros.h>
+#include <rclcpp/rclcpp.hpp>
 #include <Eigen/Eigen>
 #include <Eigen/StdVector>
 #include <iostream>
@@ -45,7 +45,7 @@ public:
   enum GRID_STATE { UNKNOWN, FREE, OCCUPIED };
 
   // Core map management functions
-  void initMap(ros::NodeHandle& nh);
+  void initMap(rclcpp::Node::SharedPtr node);
   void inputDepthCloud2D(const pcl::PointCloud<pcl::PointXY>::Ptr& points,
       const Eigen::Vector3d& camera_pos, vector<Eigen::Vector2i>& free_grids);
   void inputObjectCloud2D(

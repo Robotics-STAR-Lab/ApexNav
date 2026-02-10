@@ -1,8 +1,9 @@
 #ifndef _OBJECT_MAP2D_H_
 #define _OBJECT_MAP2D_H_
 
-// ROS and system includes
-#include <ros/ros.h>
+// ROS2 and system includes
+#include <rclcpp/rclcpp.hpp>
+#include <sensor_msgs/msg/point_cloud2.hpp>
 #include <Eigen/Eigen>
 #include <memory>
 #include <vector>
@@ -17,7 +18,7 @@
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
 #include <pcl/conversions.h>
-#include <pcl_ros/point_cloud.h>
+#include <pcl_conversions/pcl_conversions.h>
 #include <pcl/filters/voxel_grid.h>
 #include <pcl/kdtree/kdtree_flann.h>
 #include <pcl/common/common.h>
@@ -101,7 +102,7 @@ struct ObjectCluster {
 
 class ObjectMap2D {
 public:
-  ObjectMap2D(SDFMap2D* sdf_map, ros::NodeHandle& nh);
+  ObjectMap2D(SDFMap2D* sdf_map, rclcpp::Node::SharedPtr node);
   ~ObjectMap2D() = default;
 
   int searchSingleObjectCluster(const DetectedObject& detected_object);
@@ -163,7 +164,8 @@ private:
   bool checkSafety(const Eigen::Vector2d& pos);
 
   // ==================== Data Members ====================
-  ros::Publisher object_cloud_pub_;  ///< Publisher for colored object visualization
+  rclcpp::Node::SharedPtr node_;  ///< ROS2 node handle
+  rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr object_cloud_pub_;  ///< Publisher for colored object visualization
 
   // Object storage and indexing
   vector<int> object_indexs_;      ///< Grid cell to object ID mapping
@@ -188,10 +190,10 @@ inline void ObjectMap2D::printFusionInfo(const ObjectCluster& obj, int label, co
 {
   // Use purple for high-confidence label 0, green for others
   if (label == 0 && obj.confidence_scores_[label] >= min_confidence_)
-    ROS_WARN("%s%s id = %d label = %d confidence score = %.3lf %s", T_COLORS[5], state, obj.id_,
+    RCLCPP_WARN(node_->get_logger(), "%s%s id = %d label = %d confidence score = %.3lf %s", T_COLORS[5], state, obj.id_,
         label, obj.confidence_scores_[label], T_COLORS[0]);
   else
-    ROS_WARN("%s%s id = %d label = %d confidence score = %.3lf %s", T_COLORS[2], state, obj.id_,
+    RCLCPP_WARN(node_->get_logger(), "%s%s id = %d label = %d confidence score = %.3lf %s", T_COLORS[2], state, obj.id_,
         label, obj.confidence_scores_[label], T_COLORS[0]);
 }
 
@@ -438,11 +440,11 @@ inline void ObjectMap2D::publishObjectClouds()
   combined_colored_cloud->is_dense = true;
 
   // Publish the combined visualization
-  sensor_msgs::PointCloud2 output;
+  sensor_msgs::msg::PointCloud2 output;
   pcl::toROSMsg(*combined_colored_cloud, output);
   output.header.frame_id = "world";
-  output.header.stamp = ros::Time::now();
-  object_cloud_pub_.publish(output);
+  output.header.stamp = node_->get_clock()->now();
+  object_cloud_pub_->publish(output);
 }
 }  // namespace apexnav_planner
 

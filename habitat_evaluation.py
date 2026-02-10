@@ -35,7 +35,9 @@ from copy import deepcopy
 # Third-party library imports
 from hydra import initialize, compose
 import numpy as np
-import rospy
+import rclpy
+from rclpy.node import Node
+from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
 from geometry_msgs.msg import PoseStamped
 from omegaconf import DictConfig
 from prettytable import PrettyTable
@@ -69,7 +71,7 @@ from basic_utils.object_point_cloud_utils.object_point_cloud import (
 )
 from basic_utils.record_episode.read_record import read_record
 from basic_utils.record_episode.write_record import write_record
-from habitat2ros import habitat_publisher
+from habitat2ros.habitat_publisher import ROSPublisherNonNode
 from llm.answer_reader.answer_reader import read_answer
 from params import HABITAT_STATE, ROS_STATE, ACTION, RESULT_TYPES
 from vlm.Labels import MP3D_ID_TO_NAME
@@ -77,35 +79,99 @@ from vlm.utils.get_itm_message import get_itm_message_cosine
 from vlm.utils.get_object_utils import get_object
 
 
-def publish_int32(publisher, data):
-    msg = Int32()
-    msg.data = data
-    publisher.publish(msg)
+class HabitatEvalNode(Node):
+    def __init__(self):
+        super().__init__('habitat_eval_node')
 
+        # QoS profile
+        qos = QoSProfile(
+            reliability=ReliabilityPolicy.RELIABLE,
+            history=HistoryPolicy.KEEP_LAST,
+            depth=10
+        )
 
-def publish_float64(publisher, data):
-    msg = Float64()
-    msg.data = data
-    publisher.publish(msg)
+        # State variables
+        self.global_action = None
+        self.ros_state = ROS_STATE.INIT
+        self.final_state = 0
+        self.expl_result = 0
+        self.msg_observations = None
+        self.fusion_threshold = 0.0
+        self.pub_timer = None
 
+        # Publishers
+        self.obj_point_cloud_pub = self.create_publisher(
+            PointCloud2, "habitat/object_point_cloud", qos)
+        self.state_pub = self.create_publisher(Int32, "/habitat/state", qos)
+        self.trigger_pub = self.create_publisher(PoseStamped, "/move_base_simple/goal", qos)
+        self.itm_score_pub = self.create_publisher(Float64, "/blip2/cosine_score", qos)
+        self.confidence_threshold_pub = self.create_publisher(
+            Float64, "/detector/confidence_threshold", qos)
+        self.cld_with_score_pub = self.create_publisher(
+            MultipleMasksWithConfidence, "/detector/clouds_with_scores", qos)
+        self.progress_pub = self.create_publisher(Int32MultiArray, "/habitat/progress", qos)
+        self.record_pub = self.create_publisher(Float32MultiArray, "/habitat/record", qos)
 
-def publish_int32_array(publisher, data_list):
-    msg = Int32MultiArray()
-    msg.data = data_list
-    publisher.publish(msg)
+        # ROS Publisher for habitat topics
+        self.ros_pub = ROSPublisherNonNode(self)
 
+        # Subscribers
+        self.create_subscription(Int32, "/habitat/plan_action", self.ros_action_callback, qos)
+        self.create_subscription(Int32, "/ros/state", self.ros_state_callback, qos)
+        self.create_subscription(Int32, "/ros/expl_state", self.ros_final_state_callback, qos)
+        self.create_subscription(Int32, "/ros/expl_result", self.ros_expl_result_callback, qos)
 
-def publish_float32_array(publisher, data_list):
-    msg = Float32MultiArray()
-    msg.data = data_list
-    publisher.publish(msg)
+    def ros_action_callback(self, msg):
+        self.global_action = msg.data
 
+    def ros_state_callback(self, msg):
+        self.ros_state = msg.data
 
-def signal_handler(sig, frame):
-    """Handle Ctrl+C signal for graceful shutdown"""
-    print("Ctrl+C detected! Shutting down...")
-    rospy.signal_shutdown("Manual shutdown")
-    os._exit(0)
+    def ros_final_state_callback(self, msg):
+        self.final_state = msg.data
+
+    def ros_expl_result_callback(self, msg):
+        self.expl_result = msg.data
+
+    def publish_int32(self, publisher, data):
+        msg = Int32()
+        msg.data = data
+        publisher.publish(msg)
+
+    def publish_float64(self, publisher, data):
+        msg = Float64()
+        msg.data = float(data)
+        publisher.publish(msg)
+
+    def publish_int32_array(self, publisher, data_list):
+        msg = Int32MultiArray()
+        msg.data = data_list
+        publisher.publish(msg)
+
+    def publish_float32_array(self, publisher, data_list):
+        msg = Float32MultiArray()
+        msg.data = [float(x) for x in data_list]
+        publisher.publish(msg)
+
+    def publish_observations_callback(self):
+        """Timer callback to publish habitat observations and trigger messages"""
+        if self.msg_observations is None:
+            return
+        tmp = deepcopy(self.msg_observations)
+        self.ros_pub.habitat_publish_ros_topic(tmp)
+        self.publish_float64(self.confidence_threshold_pub, self.fusion_threshold)
+        trigger = PoseStamped()
+        self.trigger_pub.publish(trigger)
+
+    def start_observation_timer(self):
+        """Start timer for publishing observations"""
+        self.pub_timer = self.create_timer(0.25, self.publish_observations_callback)
+
+    def stop_observation_timer(self):
+        """Stop observation timer"""
+        if self.pub_timer is not None:
+            self.pub_timer.cancel()
+            self.pub_timer = None
 
 
 def transform_rgb_bgr(image):
@@ -113,35 +179,11 @@ def transform_rgb_bgr(image):
     return image[:, :, [2, 1, 0]]
 
 
-def publish_observations(event):
-    """Timer callback to publish habitat observations and trigger messages"""
-    global msg_observations, fusion_threshold
-    global ros_pub, trigger_pub, confidence_threshold_pub
-    tmp = deepcopy(msg_observations)
-    ros_pub.habitat_publish_ros_topic(tmp)
-    publish_float64(confidence_threshold_pub, fusion_threshold)
-    trigger = PoseStamped()
-    trigger_pub.publish(trigger)
-
-
-def ros_action_callback(msg):
-    global global_action
-    global_action = msg.data
-
-
-def ros_state_callback(msg):
-    global ros_state
-    ros_state = msg.data
-
-
-def ros_final_state_callback(msg):
-    global final_state
-    final_state = msg.data
-
-
-def ros_expl_result_callback(msg):
-    global expl_result
-    expl_result = msg.data
+def signal_handler(sig, frame):
+    """Handle Ctrl+C signal for graceful shutdown"""
+    print("Ctrl+C detected! Shutting down...")
+    rclpy.shutdown()
+    os._exit(0)
 
 
 def _parse_dataset_arg():
@@ -156,16 +198,18 @@ def _parse_dataset_arg():
         default="hm3dv2",
         help="Choose dataset: hm3dv1, hm3dv2 or mp3d (default: hm3dv2)",
     )
+    parser.add_argument(
+        "--delay",
+        type=float,
+        default=0.0,
+        help="Delay in seconds between each step (default: 0.0)",
+    )
     # Keep unknown so users can still pass Hydra-style overrides (e.g., key=value)
     args, unknown = parser.parse_known_args()
-    return args.dataset, unknown
+    return args.dataset, args.delay, unknown
 
 
-def main(cfg: DictConfig) -> None:
-    global msg_observations, global_action, ros_state, fusion_threshold
-    global ros_pub, trigger_pub, obj_point_cloud_pub, confidence_threshold_pub
-    global final_state, expl_result
-
+def main(cfg: DictConfig, node: HabitatEvalNode, step_delay: float = 0.0) -> None:
     # Load MP3D validation data for object category mapping
     with gzip.open(
         "data/datasets/objectnav/mp3d/v1/val/val.json.gz", "rt", encoding="utf-8"
@@ -179,8 +223,8 @@ def main(cfg: DictConfig) -> None:
 
     start_time = time.time()
 
-    final_state = 0
-    expl_result = 0
+    node.final_state = 0
+    node.expl_result = 0
     result_list = [0] * len(RESULT_TYPES)
 
     cfg = patch_config(cfg)
@@ -257,30 +301,9 @@ def main(cfg: DictConfig) -> None:
         env.current_episode = next(env.episode_iterator)
         env_count -= 1
 
-    # Initialize ROS publishers, subscribers, and timers
-    obj_point_cloud_pub = rospy.Publisher(
-        "habitat/object_point_cloud", PointCloud2, queue_size=10
-    )
-    ros_pub = habitat_publisher.ROSPublisher()
-    rospy.Subscriber("/habitat/plan_action", Int32, ros_action_callback, queue_size=10)
-    rospy.Subscriber("/ros/state", Int32, ros_state_callback, queue_size=10)
-    rospy.Subscriber("/ros/expl_state", Int32, ros_final_state_callback, queue_size=10)
-    rospy.Subscriber("/ros/expl_result", Int32, ros_expl_result_callback, queue_size=10)
-    state_pub = rospy.Publisher("/habitat/state", Int32, queue_size=10)
-    trigger_pub = rospy.Publisher("/move_base_simple/goal", PoseStamped, queue_size=10)
-    itm_score_pub = rospy.Publisher("/blip2/cosine_score", Float64, queue_size=10)
-    confidence_threshold_pub = rospy.Publisher(
-        "/detector/confidence_threshold", Float64, queue_size=10
-    )
-    cld_with_score_pub = rospy.Publisher(
-        "/detector/clouds_with_scores", MultipleMasksWithConfidence, queue_size=10
-    )
-    progress_pub = rospy.Publisher("/habitat/progress", Int32MultiArray, queue_size=10)
-    record_pub = rospy.Publisher("/habitat/record", Float32MultiArray, queue_size=10)
-
     for epi in range(number_of_episodes - num_total):
         # Publish progress information
-        publish_int32_array(progress_pub, [num_total, number_of_episodes])
+        node.publish_int32_array(node.progress_pub, [num_total, number_of_episodes])
 
         if flag_once:
             while env_count:
@@ -290,14 +313,14 @@ def main(cfg: DictConfig) -> None:
         # Initialize episode variables
         pass_object = 0.0
         near_object = 0.0
-        global_action = None
+        node.global_action = None
         cld_with_score_msg = MultipleMasksWithConfidence()
         count_steps = 0
 
         camera_pitch = 0.0
         observations = env.reset()
         observations["camera_pitch"] = camera_pitch
-        msg_observations = deepcopy(observations)
+        node.msg_observations = deepcopy(observations)
         del observations["camera_pitch"]
         label = env.current_episode.object_category
 
@@ -307,7 +330,7 @@ def main(cfg: DictConfig) -> None:
             label = id_to_name.get(coco_id, label)
 
         # Get LLM answer and fusion threshold for the target object
-        llm_answer, room, fusion_threshold = read_answer(
+        llm_answer, room, node.fusion_threshold = read_answer(
             llm_answer_path, llm_response_path, label, llm_client
         )
 
@@ -321,27 +344,36 @@ def main(cfg: DictConfig) -> None:
             vis_frames = [frame]
 
         # Start publishing basic information and trigger messages
-        pub_timer = rospy.Timer(rospy.Duration(0.25), publish_observations)
+        node.start_observation_timer()
 
         print("Agent is waiting in the environment!!!")
 
         # Wait for ROS system to be ready
-        rate = rospy.Rate(10)
-        ros_state = ROS_STATE.INIT
-        while ros_state == ROS_STATE.INIT or ros_state == ROS_STATE.WAIT_TRIGGER:
-            if ros_state == ROS_STATE.INIT:
+        node.ros_state = ROS_STATE.INIT
+        while node.ros_state == ROS_STATE.INIT or node.ros_state == ROS_STATE.WAIT_TRIGGER:
+            if node.ros_state == ROS_STATE.INIT:
                 print("Waiting for ROS to get odometry...")
-            elif ros_state == ROS_STATE.WAIT_TRIGGER:
+            elif node.ros_state == ROS_STATE.WAIT_TRIGGER:
                 print("Waiting for ROS trigger...")
-            rate.sleep()
+            rclpy.spin_once(node, timeout_sec=0.1)
 
         # Stop timer publishing when starting action execution
-        pub_timer.shutdown()
+        node.stop_observation_timer()
 
         print("Agent is ready to go!!!!")
 
-        rate = rospy.Rate(10)
-        while not rospy.is_shutdown() and not env.episode_over:
+        while rclpy.ok() and not env.episode_over:
+            # Process ROS callbacks
+            rclpy.spin_once(node, timeout_sec=0.1)
+
+            # Keep publishing observations, confidence, and trigger so FSM
+            # always has fresh odom and can re-trigger after episode transitions
+            if node.msg_observations is not None:
+                node.ros_pub.habitat_publish_ros_topic(deepcopy(node.msg_observations))
+                node.publish_float64(node.confidence_threshold_pub, node.fusion_threshold)
+                trigger = PoseStamped()
+                node.trigger_pub.publish(trigger)
+
             # Skip episode if target is not on the same floor
             is_feasible = 0
             for goal in env.current_episode.goals:
@@ -354,26 +386,26 @@ def main(cfg: DictConfig) -> None:
 
             # Parse action from decision system
             action = None
-            if global_action is not None:
+            if node.global_action is not None:
                 if count_steps == max_episode_steps - 1:
-                    global_action = ACTION.STOP
+                    node.global_action = ACTION.STOP
 
-                if global_action == ACTION.MOVE_FORWARD:
+                if node.global_action == ACTION.MOVE_FORWARD:
                     action = HabitatSimActions.move_forward
-                elif global_action == ACTION.TURN_LEFT:
+                elif node.global_action == ACTION.TURN_LEFT:
                     action = HabitatSimActions.turn_left
-                elif global_action == ACTION.TURN_RIGHT:
+                elif node.global_action == ACTION.TURN_RIGHT:
                     action = HabitatSimActions.turn_right
-                elif global_action == ACTION.TURN_DOWN:
+                elif node.global_action == ACTION.TURN_DOWN:
                     action = HabitatSimActions.look_down
                     camera_pitch = camera_pitch - np.pi / 6.0
-                elif global_action == ACTION.TURN_UP:
+                elif node.global_action == ACTION.TURN_UP:
                     action = HabitatSimActions.look_up
                     camera_pitch = camera_pitch + np.pi / 6.0
-                elif global_action == ACTION.STOP:
+                elif node.global_action == ACTION.STOP:
                     action = HabitatSimActions.stop
 
-                global_action = None
+                node.global_action = None
 
             if action is None:
                 continue
@@ -383,7 +415,7 @@ def main(cfg: DictConfig) -> None:
             print(f"Finding [{label}]; Action: {action};")
 
             # Notify ROS system that action execution is starting
-            publish_int32(state_pub, HABITAT_STATE.ACTION_EXEC)
+            node.publish_int32(node.state_pub, HABITAT_STATE.ACTION_EXEC)
 
             observations = env.step(action)
 
@@ -392,7 +424,7 @@ def main(cfg: DictConfig) -> None:
             print(f"Target related room: {room}")
             print(f"ITM cosine similarity: {cosine:.3f}")
 
-            publish_float64(itm_score_pub, cosine)
+            node.publish_float64(node.itm_score_pub, cosine)
 
             # Detect objects in the current observation
             observations["rgb"], score_list, object_masks_list, label_list = get_object(
@@ -401,20 +433,20 @@ def main(cfg: DictConfig) -> None:
 
             # Publish habitat observations to ROS
             observations["camera_pitch"] = camera_pitch
-            msg_observations = deepcopy(observations)
+            node.msg_observations = deepcopy(observations)
             del observations["camera_pitch"]
-            ros_pub.habitat_publish_ros_topic(msg_observations)
+            node.ros_pub.habitat_publish_ros_topic(node.msg_observations)
 
             # Generate and publish object point clouds
             obj_point_cloud_list = get_object_point_cloud(
-                cfg, observations, object_masks_list
+                cfg, observations, object_masks_list, node
             )
 
             # Publish detection-related information
             cld_with_score_msg.point_clouds = obj_point_cloud_list
             cld_with_score_msg.confidence_scores = score_list
             cld_with_score_msg.label_indices = label_list
-            cld_with_score_pub.publish(cld_with_score_msg)
+            node.cld_with_score_pub.publish(cld_with_score_msg)
 
             # Generate video frame
             info = env.get_metrics()
@@ -429,12 +461,23 @@ def main(cfg: DictConfig) -> None:
             if distance_to_goal <= success_distance and pass_object == 0:
                 pass_object = 1
 
+            # Optional delay between steps for visualization
+            if step_delay > 0:
+                time.sleep(step_delay)
+
             # Notify ROS system that action execution is complete
-            publish_int32(state_pub, HABITAT_STATE.ACTION_FINISH)
-            rate.sleep()
+            node.publish_int32(node.state_pub, HABITAT_STATE.ACTION_FINISH)
 
         # Notify ROS system that current episode evaluation is complete
-        publish_int32(state_pub, HABITAT_STATE.EPISODE_FINISH)
+        node.publish_int32(node.state_pub, HABITAT_STATE.EPISODE_FINISH)
+
+        # Wait for FSM to process EPISODE_FINISH and reset to INIT state
+        # This prevents a race condition where the next episode starts
+        # before the FSM has re-initialized
+        for _ in range(50):  # up to 5 seconds
+            rclpy.spin_once(node, timeout_sec=0.1)
+            if node.ros_state == ROS_STATE.INIT:
+                break
 
         # Collect evaluation metrics
         info = env.get_metrics()
@@ -455,8 +498,8 @@ def main(cfg: DictConfig) -> None:
         else:
             result_text = check_failure(
                 env.current_episode,
-                final_state,
-                expl_result,
+                node.final_state,
+                node.expl_result,
                 count_steps,
                 max_episode_steps,
                 pass_object,
@@ -549,11 +592,11 @@ def main(cfg: DictConfig) -> None:
             distance_to_goal_all / num_total,
         ]
         record_data.extend(result_list)
-        publish_float32_array(record_pub, record_data)
+        node.publish_float32_array(node.record_pub, record_data)
 
         pbar.update()
         env.current_episode = next(env.episode_iterator)
-        rospy.sleep(0.1)  # wait a moment
+        time.sleep(0.1)  # wait a moment
 
     env.close()
     pbar.close()
@@ -561,16 +604,26 @@ def main(cfg: DictConfig) -> None:
 
 if __name__ == "__main__":
     signal.signal(signal.SIGINT, signal_handler)
-    rospy.init_node("habitat_eval_node", anonymous=True)
+    rclpy.init()
+
+    # Register habitat config search path plugin before Hydra init
+    from habitat.config.default_structured_configs import (
+        HabitatConfigPlugin,
+        register_hydra_plugin,
+    )
+    register_hydra_plugin(HabitatConfigPlugin)
 
     try:
-        dataset, overrides = _parse_dataset_arg()
+        node = HabitatEvalNode()
+        dataset, step_delay, overrides = _parse_dataset_arg()
         cfg_name = f"habitat_eval_{dataset}"
         # Compose the chosen config and pass through extra Hydra overrides
         with initialize(version_base=None, config_path="config"):
             cfg = compose(config_name=cfg_name, overrides=overrides)
-        main(cfg)
+        main(cfg, node, step_delay=step_delay)
     except Exception as e:
         print(f"Unexpected error occurred: {e}")
-        rospy.signal_shutdown("Shutdown due to error")
+        rclpy.shutdown()
         os._exit(1)
+    finally:
+        rclpy.shutdown()

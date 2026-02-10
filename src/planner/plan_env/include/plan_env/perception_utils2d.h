@@ -1,7 +1,7 @@
 #ifndef _PERCEPTION_UTILS_2D_H_
 #define _PERCEPTION_UTILS_2D_H_
 
-#include <ros/ros.h>
+#include <rclcpp/rclcpp.hpp>
 #include <Eigen/Eigen>
 #include <vector>
 
@@ -13,7 +13,7 @@ namespace apexnav_planner {
 
 class PerceptionUtils2D {
 public:
-  PerceptionUtils2D(ros::NodeHandle& nh);
+  PerceptionUtils2D(rclcpp::Node::SharedPtr node);
   ~PerceptionUtils2D()
   {
   }

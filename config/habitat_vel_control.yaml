@@ -32,7 +32,7 @@ habitat:
   simulator:
     habitat_sim_v0:
       allow_sliding: true
-      enable_physics: true
+      enable_physics: false
     forward_step_size: 0
     turn_angle: 0
     agents:

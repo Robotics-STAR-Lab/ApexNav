@@ -9,50 +9,65 @@ environment and the Habitat simulator before running this example.
 
 ## Quick Start
 
-> All following commands should be run in the `apexnav` conda environment
+> **Note:** All 6 processes below must run in separate terminals with the conda environment and ROS2 sourced:
+> ```bash
+> conda activate apexnav_ros2
+> source /opt/ros/jazzy/setup.bash
+> source install/setup.bash
+> ```
 
-### ROS Compilation
+### ROS2 Build
 ```bash
-catkin_make -DPYTHON_EXECUTABLE=/usr/bin/python3
+source /opt/ros/jazzy/setup.bash
+colcon build
+source install/setup.bash
 ```
 
-### Run VLM servers
-Run each of the following commands in a separate terminal:
+### Step 1: Run VLM Servers
+Start each server in a separate terminal (4 terminals total):
 ```bash
+# Terminal 1
 python -m vlm.detector.grounding_dino --port 12181
+
+# Terminal 2
 python -m vlm.itm.blip2itm --port 12182
+
+# Terminal 3
 python -m vlm.segmentor.sam --port 12183
+
+# Terminal 4
 python -m vlm.detector.yolov7 --port 12184
 ```
 
-### Launch visualization and main algorithm
+### Step 2: Launch RViz Visualization
 ```bash
-source ./devel/setup.bash && roslaunch exploration_manager rviz_traj.launch   # RViz visualization
-source ./devel/setup.bash && roslaunch exploration_manager exploration_traj.launch   # ApexNav main algorithm
+# Terminal 5
+ros2 launch exploration_manager rviz_traj.launch.py
 ```
 
-### Run Habitat simulator (velocity-control version)
+### Step 3: Launch ApexNav Main Algorithm
 ```bash
-source ./devel/setup.bash && python habitat_vel_control.py
+# Terminal 6
+ros2 launch exploration_manager exploration_traj.launch.py
 ```
 
-### Run the real-world example node
+### Step 4: Run Habitat Simulator
 ```bash
-source ./devel/setup.bash && python ./real_world_test_example/real_world_test_habitat.py
+# Terminal 7
+python habitat_vel_control.py
 ```
 
+### Step 5: Run Real-world Test Node
+```bash
+# Terminal 8
+python ./real_world_test_example/real_world_test_habitat.py
+```
 
-### Visualization with RViz
+## Navigation Modes
 
-<p align="center" style="font-size: 1.0em;">
-  <a href="">
-    <img src="../assets/rviz_show.jpg" alt="piperviz_showline" width="80%">
-  </a>
-</p>
+### Manual Point-to-Point Navigation
 
-#### Manually Set Goal in RViz
-
-You can use RViz's *<strong>"2D Pose Estimate"</strong>* tool to set a target pose so the robot can navigate to a specified location.
+Use RViz's *<strong>"2D Pose Estimate"</strong>* tool to set a target pose for direct navigation.
 
 <p align="center" style="font-size: 1.0em;">
   <a href="">
@@ -61,15 +76,28 @@ You can use RViz's *<strong>"2D Pose Estimate"</strong>* tool to set a target po
   <br>
 </p>
 
-#### Autonomous Object Navigation
+### Autonomous Exploration
 
-You can use RViz's *<strong>"2D Nav Goal"</strong>* tool to start autonomous exploration.
+Use RViz's *<strong>"2D Goal Pose"</strong>* tool to start autonomous exploration.
 
 <p align="center" style="font-size: 1.0em;">
   <a href="">
     <img src="../assets/auto_search.gif" alt="apexnav_demo2" width="80%">
   </a>
   <br>
+</p>
+
+### Object Goal Navigation
+
+Set a target object for the robot to find and navigate to:
+```bash
+ros2 topic pub /detector/label std_msgs/msg/String "data: 'chair'" --once
+```
+
+<p align="center" style="font-size: 1.0em;">
+  <a href="">
+    <img src="../assets/rviz_show.jpg" alt="rviz_visualization" width="80%">
+  </a>
 </p>
 
 ## Acknowledgment

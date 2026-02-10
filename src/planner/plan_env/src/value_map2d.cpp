@@ -14,7 +14,7 @@
 #include <plan_env/value_map2d.h>
 
 namespace apexnav_planner {
-ValueMap::ValueMap(SDFMap2D* sdf_map, ros::NodeHandle& nh)
+ValueMap::ValueMap(SDFMap2D* sdf_map, rclcpp::Node::SharedPtr node)
 {
   this->sdf_map_ = sdf_map;
   int voxel_num = sdf_map_->getVoxelNum();

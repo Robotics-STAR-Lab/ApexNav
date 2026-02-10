@@ -8,16 +8,17 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <chrono>
 
-// ROS core
-#include <ros/ros.h>
+// ROS2 core
+#include <rclcpp/rclcpp.hpp>
 
-// ROS message types
-#include <geometry_msgs/PoseStamped.h>
-#include <nav_msgs/Odometry.h>
-#include <std_msgs/Float64.h>
-#include <std_msgs/Int32.h>
-#include <visualization_msgs/Marker.h>
+// ROS2 message types
+#include <geometry_msgs/msg/pose_stamped.hpp>
+#include <nav_msgs/msg/odometry.hpp>
+#include <std_msgs/msg/float64.hpp>
+#include <std_msgs/msg/int32.hpp>
+#include <visualization_msgs/msg/marker.hpp>
 
 using Eigen::Vector2d;
 using Eigen::Vector3d;
@@ -73,10 +74,11 @@ struct FSMData;
 enum ROS_STATE { INIT, WAIT_TRIGGER, PLAN_ACTION, WAIT_ACTION_FINISH, PUB_ACTION, FINISH };
 enum ACTION { STOP, MOVE_FORWARD, TURN_LEFT, TURN_RIGHT, TURN_DOWN, TURN_UP };
 enum HABITAT_STATE { READY, ACTION_EXEC, ACTION_FINISH, EPISODE_FINISH };
+
 class ExplorationFSM {
 private:
   /* Planning Utils */
-  ros::NodeHandle nh_;
+  rclcpp::Node::SharedPtr node_;
   shared_ptr<FastPlannerManager> planner_manager_;
   shared_ptr<ExplorationManager> expl_manager_;
   shared_ptr<PlanningVisualization> visualization_;
@@ -85,12 +87,17 @@ private:
   shared_ptr<FSMData> fd_;
   ROS_STATE state_;
 
-  /* ROS Utils */
-  ros::NodeHandle node_;
-  ros::Timer exec_timer_, vis_timer_, frontier_timer_;
-  ros::Subscriber trigger_sub_, odom_sub_, habitat_state_sub_, confidence_threshold_sub_;
-  ros::Publisher action_pub_, ros_state_pub_, expl_state_pub_, expl_result_pub_;
-  ros::Publisher robot_marker_pub_;
+  /* ROS2 Utils */
+  rclcpp::TimerBase::SharedPtr exec_timer_, vis_timer_, frontier_timer_;
+  rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr trigger_sub_;
+  rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_sub_;
+  rclcpp::Subscription<std_msgs::msg::Int32>::SharedPtr habitat_state_sub_;
+  rclcpp::Subscription<std_msgs::msg::Float64>::SharedPtr confidence_threshold_sub_;
+  rclcpp::Publisher<std_msgs::msg::Int32>::SharedPtr action_pub_;
+  rclcpp::Publisher<std_msgs::msg::Int32>::SharedPtr ros_state_pub_;
+  rclcpp::Publisher<std_msgs::msg::Int32>::SharedPtr expl_state_pub_;
+  rclcpp::Publisher<std_msgs::msg::Int32>::SharedPtr expl_result_pub_;
+  rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr robot_marker_pub_;
 
   /* Action Planner */
   int callActionPlanner();
@@ -113,19 +120,19 @@ private:
   void visualize();
   void clearVisMarker();
 
-  /* ROS callbacks */
-  void FSMCallback(const ros::TimerEvent& e);
-  void frontierCallback(const ros::TimerEvent& e);
-  void triggerCallback(const geometry_msgs::PoseStampedConstPtr& msg);
-  void odometryCallback(const nav_msgs::OdometryConstPtr& msg);
-  void habitatStateCallback(const std_msgs::Int32ConstPtr& msg);
-  void confidenceThresholdCallback(const std_msgs::Float64ConstPtr& msg);
+  /* ROS2 callbacks */
+  void FSMCallback();
+  void frontierCallback();
+  void triggerCallback(const geometry_msgs::msg::PoseStamped::SharedPtr msg);
+  void odometryCallback(const nav_msgs::msg::Odometry::SharedPtr msg);
+  void habitatStateCallback(const std_msgs::msg::Int32::SharedPtr msg);
+  void confidenceThresholdCallback(const std_msgs::msg::Float64::SharedPtr msg);
 
 public:
   ExplorationFSM() = default;
   ~ExplorationFSM() = default;
 
-  void init(ros::NodeHandle& nh);
+  void init(rclcpp::Node::SharedPtr node);
 
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 };

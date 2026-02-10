@@ -32,7 +32,9 @@ from copy import deepcopy
 from hydra import initialize, compose
 import numpy as np
 import cv2
-import rospy
+import rclpy
+from rclpy.node import Node
+from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
 from omegaconf import DictConfig
 from std_msgs.msg import Float64
 
@@ -53,7 +55,7 @@ from habitat.utils.visualizations.utils import (
 from plan_env.msg import MultipleMasksWithConfidence
 
 # Local project imports
-from habitat2ros import habitat_publisher
+from habitat2ros.habitat_publisher import ROSPublisherNonNode
 from vlm.utils.get_object_utils import get_object
 from vlm.utils.get_itm_message import get_itm_message_cosine
 from llm.answer_reader.answer_reader import read_answer
@@ -71,21 +73,65 @@ LOOK_DOWN_KEY = "e"
 FINISH = "f"
 
 
+class HabitatManualNode(Node):
+    def __init__(self):
+        super().__init__('habitat_ros_publisher')
+
+        # QoS profile
+        qos = QoSProfile(
+            reliability=ReliabilityPolicy.RELIABLE,
+            history=HistoryPolicy.KEEP_LAST,
+            depth=10
+        )
+
+        # State variables
+        self.msg_observations = None
+        self.fusion_threshold = 0.0
+        self.pub_timer = None
+
+        # Publishers
+        self.itm_score_pub = self.create_publisher(Float64, "/blip2/cosine_score", qos)
+        self.cld_with_score_pub = self.create_publisher(
+            MultipleMasksWithConfidence, "/detector/clouds_with_scores", qos)
+        self.confidence_threshold_pub = self.create_publisher(
+            Float64, "/detector/confidence_threshold", qos)
+
+        # ROS Publisher for habitat topics
+        self.ros_pub = ROSPublisherNonNode(self)
+
+    def publish_float64(self, publisher, data: float):
+        """Publish a Float64 value to the given ROS publisher."""
+        msg = Float64()
+        msg.data = float(data)
+        publisher.publish(msg)
+
+    def publish_observations_callback(self):
+        """Timer callback to publish habitat observations"""
+        if self.msg_observations is None:
+            return
+        tmp = deepcopy(self.msg_observations)
+        self.ros_pub.habitat_publish_ros_topic(tmp)
+        self.publish_float64(self.confidence_threshold_pub, self.fusion_threshold)
+
+    def start_observation_timer(self):
+        """Start timer for publishing observations"""
+        self.pub_timer = self.create_timer(0.1, self.publish_observations_callback)
+
+    def stop_observation_timer(self):
+        """Stop observation timer"""
+        if self.pub_timer is not None:
+            self.pub_timer.cancel()
+            self.pub_timer = None
+
+
 def signal_handler(sig, frame):
     print("Ctrl+C detected! Shutting down...")
-    rospy.signal_shutdown("Manual shutdown")
+    rclpy.shutdown()
     os._exit(0)
 
 
 def transform_rgb_bgr(image):
     return image[:, :, [2, 1, 0]]
-
-
-def publish_float64(publisher, data: float):
-    """Publish a Float64 value to the given ROS publisher."""
-    msg = Float64()
-    msg.data = data
-    publisher.publish(msg)
 
 
 def print_manual_controls():
@@ -99,14 +145,6 @@ def print_manual_controls():
     print(f"  {FINISH} - Stop (end episode)")
     print("  Ctrl+C - Quit (graceful shutdown)")
     print("Note: Focus the 'Observations' window before pressing keys.\n")
-
-
-def publish_observations(event):
-    global msg_observations, fusion_threshold
-    global ros_pub, confidence_threshold_pub
-    tmp = deepcopy(msg_observations)
-    ros_pub.habitat_publish_ros_topic(tmp)
-    publish_float64(confidence_threshold_pub, fusion_threshold)
 
 
 def _parse_dataset_arg():
@@ -123,10 +161,7 @@ def _parse_dataset_arg():
     return args.dataset, unknown
 
 
-def main(cfg: DictConfig) -> None:
-    global msg_observations, fusion_threshold
-    global ros_pub, confidence_threshold_pub
-
+def main(cfg: DictConfig, node: HabitatManualNode) -> None:
     with gzip.open(
         "data/datasets/objectnav/mp3d/v1/val/val.json.gz", "rt", encoding="utf-8"
     ) as f:
@@ -175,7 +210,7 @@ def main(cfg: DictConfig) -> None:
                 "collisions": CollisionsMeasurementConfig(),
             }
         )
-    
+
     # Initialize Habitat environment
     env = habitat.Env(cfg)
     print("Environment creation successful")
@@ -194,18 +229,10 @@ def main(cfg: DictConfig) -> None:
 
     camera_pitch = 0.0
     observations["camera_pitch"] = camera_pitch
-    msg_observations = deepcopy(observations)
+    node.msg_observations = deepcopy(observations)
 
-    # Initialize ROS publishers and timer for periodic observation publishing
-    ros_pub = habitat_publisher.ROSPublisher()
-    timer = rospy.Timer(rospy.Duration(0.1), publish_observations)
-    itm_score_pub = rospy.Publisher("/blip2/cosine_score", Float64, queue_size=10)
-    cld_with_score_pub = rospy.Publisher(
-        "/detector/clouds_with_scores", MultipleMasksWithConfidence, queue_size=10
-    )
-    confidence_threshold_pub = rospy.Publisher(
-        "/detector/confidence_threshold", Float64, queue_size=10
-    )
+    # Start timer for periodic observation publishing
+    node.start_observation_timer()
 
     print("Agent stepping around inside environment.")
     print_manual_controls()
@@ -216,7 +243,7 @@ def main(cfg: DictConfig) -> None:
         coco_id = category_to_coco[label]
         label = id_to_name.get(coco_id, label)
 
-    llm_answer, room, fusion_threshold = read_answer(
+    llm_answer, room, node.fusion_threshold = read_answer(
         llm_answer_path, llm_response_path, label, llm_client
     )
 
@@ -224,7 +251,7 @@ def main(cfg: DictConfig) -> None:
     count_steps = 0
 
     # Manual control loop
-    while not rospy.is_shutdown() and not env.episode_over:
+    while rclpy.ok() and not env.episode_over:
         print(f"\n-------------Step: {count_steps}-------------")
         keystroke = cv2.waitKey(0)
         if keystroke == ord(FORWARD_KEY):
@@ -251,7 +278,7 @@ def main(cfg: DictConfig) -> None:
             print("INVALID KEY")
             continue
 
-        timer.shutdown()
+        node.stop_observation_timer()
         print(f"I'm finding {label}")
         observations = env.step(action)
         count_steps += 1
@@ -262,7 +289,7 @@ def main(cfg: DictConfig) -> None:
         cosine = get_itm_message_cosine(observations["rgb"], label, room)
         print(f"Target related room: {room}")
         print(f"ITM cosine similarity: {cosine:.3f}")
-        publish_float64(itm_score_pub, cosine)
+        node.publish_float64(node.itm_score_pub, cosine)
 
         # Detect objects in the current observation
         detect_img, score_list, object_masks_list, label_list = get_object(
@@ -271,20 +298,20 @@ def main(cfg: DictConfig) -> None:
 
         observations["rgb"] = detect_img
         observations["camera_pitch"] = camera_pitch
-        ros_pub.habitat_publish_ros_topic(observations)
+        node.ros_pub.habitat_publish_ros_topic(observations)
         observations["rgb"] = transform_rgb_bgr(detect_img)
         del observations["camera_pitch"]
         frame = observations_to_image(observations, info)
 
         # Generate and publish object point clouds
         obj_point_cloud_list = get_object_point_cloud(
-            cfg, observations, object_masks_list
+            cfg, observations, object_masks_list, node
         )
 
         cld_with_score_msg.point_clouds = obj_point_cloud_list
         cld_with_score_msg.confidence_scores = score_list
         cld_with_score_msg.label_indices = label_list
-        cld_with_score_pub.publish(cld_with_score_msg)
+        node.cld_with_score_pub.publish(cld_with_score_msg)
 
         # Show updated visualization frame
         cv2.imshow("Observations", frame)
@@ -294,15 +321,18 @@ def main(cfg: DictConfig) -> None:
 
 if __name__ == "__main__":
     signal.signal(signal.SIGINT, signal_handler)
-    rospy.init_node("habitat_ros_publisher", anonymous=True)
+    rclpy.init()
 
     try:
+        node = HabitatManualNode()
         dataset, overrides = _parse_dataset_arg()
         cfg_name = f"habitat_eval_{dataset}"
         with initialize(version_base=None, config_path="config"):
             cfg = compose(config_name=cfg_name, overrides=overrides)
-        main(cfg)
+        main(cfg, node)
     except Exception as e:
         print(f"Unexpected error occurred: {e}")
-        rospy.signal_shutdown("Shutdown due to error")
+        rclpy.shutdown()
         os._exit(1)
+    finally:
+        rclpy.shutdown()

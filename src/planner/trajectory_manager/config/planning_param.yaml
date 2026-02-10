@@ -1,64 +1,100 @@
-######################## car model ########################
-# Physical parameters
-max_vel: 0.5
-max_acc: 2.0
-max_domega: 1.0
-zoom_omega: 0.25
-max_cur: 10.0
+/**:
+  ros__parameters:
+    ######################## car model ########################
+    # Physical parameters
+    max_vel: 0.5
+    max_acc: 2.0
+    max_domega: 1.0
+    zoom_omega: 0.25
+    max_cur: 10.0
 
-# Wheelbase
-wheel_base: 0.14
+    # Wheelbase
+    wheel_base: 0.14
 
-# Vehicle dimensions
-length: 0.16
-width: 0.16
-height: 0.20
+    # Vehicle dimensions
+    length: 0.16
+    width: 0.16
+    height: 0.20
 
-######################## kinoastar ########################
-# A* oneshot curvature
-astar_cur: 10
+    ######################## kinoastar ########################
+    # A* oneshot curvature
+    astar_cur: 10
 
-# Forward search displacement
-step_arc: 0.2
+    # Forward search displacement
+    step_arc: 0.2
 
-# Greedy search coefficient
-lambda_heu: 1.0
+    # Greedy search coefficient
+    lambda_heu: 1.0
 
-# Maximum search time
-max_seach_time: 2.0
+    # Maximum search time
+    max_seach_time: 2.0
 
-# Discretization interval for oneshot intermediate point collision checks
-checkl: 0.05
+    # Discretization interval for oneshot intermediate point collision checks
+    checkl: 0.05
 
-# Number of checks when expanding states in A*
-check_num: 5
+    # Number of checks when expanding states in A*
+    check_num: 5
 
-# Considered stationary if speed below this
-non_siguav: 0.01
+    # Considered stationary if speed below this
+    non_siguav: 0.01
 
-# Oneshot range (TODO: reducing it may cause self-rotation)
-oneshot_range: 0.8
+    # Oneshot range (TODO: reducing it may cause self-rotation)
+    oneshot_range: 0.8
 
-# Sampling time passed to backend
-sampletime: 0.1
+    # Sampling time passed to backend
+    sampletime: 0.1
 
-# Collision check sampling interval; recommend half of grid_interval
-collision_interval: 0.1
+    # Collision check sampling interval; recommend half of grid_interval
+    collision_interval: 0.1
 
-######################## global planning ########################
-time_weight: 15.0
+    # ROS2: kino_astar namespaced parameters (code reads with kino_astar. prefix)
+    kino_astar:
+      max_vel: 0.5
+      max_acc: 2.0
+      max_cur: 10.0
+      wheel_base: 0.14
+      non_siguav: 0.01
+      collision_interval: 0.1
+      length: 0.16
+      width: 0.16
+      height: 0.20
+      lambda_heu: 1.0
+      max_seach_time: 2.0
+      step_arc: 0.2
+      checkl: 0.05
+      check_num: 5
+      oneshot_range: 0.8
+      sampletime: 0.1
 
-# v_weight  a_weight omega_weight  domega_weight colli_weight
-penaltyWeights: [5, 5, 20, 5, 1000]
+    ######################## global planning ########################
+    time_weight: 15.0
 
-# Additional sampling for continuity
-denseResolution: 20
+    # v_weight  a_weight omega_weight  domega_weight colli_weight
+    penaltyWeights: [5.0, 5.0, 20.0, 5.0, 1000.0]
 
-# Average sampling
-sparseResolution: 8
+    # Additional sampling for continuity
+    denseResolution: 20
 
-# Backend sampling time
-timeResolution: 1
+    # Average sampling
+    sparseResolution: 8
 
-# Safety distance
-safe_dist: 0.20
+    # Backend sampling time
+    timeResolution: 1
+
+    # Safety distance
+    safe_dist: 0.20
+
+    # ROS2: optimizer namespaced parameters (code reads with optimizer. prefix)
+    optimizer:
+      max_vel: 0.5
+      max_acc: 2.0
+      max_domega: 1.0
+      wheel_base: 0.14
+      non_siguav: 0.01
+      zoom_omega: 0.25
+      denseResolution: 20
+      sparseResolution: 8
+      timeResolution: 1.0
+      time_weight: 15.0
+      safe_dist: 0.20
+      penaltyWeights: [5.0, 5.0, 20.0, 5.0, 1000.0]
