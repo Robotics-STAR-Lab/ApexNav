@@ -71,6 +71,18 @@ You need to install [ROS](https://www.ros.org/), and it is recommended to use [A
 ``` bash
 sudo apt update
 sudo apt-get install libarmadillo-dev libompl-dev
+
+# OSQP
+git clone --recursive -b v0.6.3 https://github.com/osqp/osqp.git
+cd osqp && mkdir build && cd build
+cmake .. -DBUILD_SHARED_LIBS=ON && make -j && sudo make install
+cd ../..
+
+# OSQP-Eigen
+git clone -b v0.8.1 https://github.com/robotology/osqp-eigen.git
+cd osqp-eigen && mkdir build && cd build
+cmake .. && make -j && sudo make install
+cd ../..
 ```
 
 #### 1.2 LLM (Optional)
