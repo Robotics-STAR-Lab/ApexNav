@@ -584,8 +584,8 @@ void ExplorationManager::getSortedSemanticFrontiers(const Vector2d& cur_pos,
 
     // Find maximum semantic value in neighborhood (ignoring occupied cells)
     for (auto& nbr : nbrs) {
-      if (sdf_map_->getInflateOccupancy(idx) == 1 ||
-          sdf_map_->getOccupancy(idx) == SDFMap2D::OCCUPIED)
+      if (sdf_map_->getInflateOccupancy(nbr) == 1 ||
+          sdf_map_->getOccupancy(nbr) == SDFMap2D::OCCUPIED)
         continue;
       value = std::max(value, sdf_map_->value_map_->getValue(nbr));
     }
