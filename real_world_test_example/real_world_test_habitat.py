@@ -71,7 +71,7 @@ class RealWorldNode:
             "/detector/confidence_threshold", Float64, queue_size=10
         )
         self.itm_score_pub_ = rospy.Publisher(
-            "/blip2/cosine_score", Float64, queue_size=10
+            "/clip/cosine_score", Float64, queue_size=10
         )
         self.cld_with_score_pub_ = rospy.Publisher(
             "/detector/clouds_with_scores", MultipleMasksWithConfidence, queue_size=10

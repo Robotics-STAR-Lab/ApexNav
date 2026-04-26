@@ -1,7 +1,7 @@
 import base64
 import os
 import random
-import socket
+import threading
 import time
 from typing import Any, Dict
 
@@ -24,11 +24,13 @@ def host_model(model: Any, name: str, port: int = 5000) -> None:
     Hosts a model as a REST API using Flask.
     """
     app = Flask(__name__)
+    request_lock = threading.Lock()
 
     @app.route(f"/{name}", methods=["POST"])
     def process_request() -> Dict[str, Any]:
         payload = request.json
-        return jsonify(model.process_payload(payload))
+        with request_lock:
+            return jsonify(model.process_payload(payload))
 
     app.run(host="localhost", port=port)
 
@@ -84,78 +86,36 @@ def send_request(url: str, **kwargs: Any) -> dict:
 
 
 def _send_request(url: str, **kwargs: Any) -> dict:
-    lockfiles_dir = "lockfiles"
-    if not os.path.exists(lockfiles_dir):
-        os.makedirs(lockfiles_dir)
-    filename = url.replace("/", "_").replace(":", "_") + ".lock"
-    filename = filename.replace("localhost", socket.gethostname())
-    filename = os.path.join(lockfiles_dir, filename)
-    try:
-        while True:
-            # Use a while loop to wait until this filename does not exist
-            while os.path.exists(filename):
-                # If the file exists, wait 50ms and try again
-                time.sleep(0.001)
+    request_timeout = float(
+        kwargs.pop("request_timeout", os.environ.get("VLM_REQUEST_TIMEOUT", 120))
+    )
 
-                try:
-                    # If the file was last modified more than 120 seconds ago, delete it
-                    if time.time() - os.path.getmtime(filename) > 120:
-                        os.remove(filename)
-                except FileNotFoundError:
-                    pass
+    # Create a payload dict which is a clone of kwargs but all np.array values are
+    # converted to strings
+    payload = {}
+    for k, v in kwargs.items():
+        if isinstance(v, np.ndarray):
+            payload[k] = image_to_str(v, quality=kwargs.get("quality", 90))
+        else:
+            payload[k] = v
+    # Set the headers
+    headers = {"Content-Type": "application/json"}
 
-            rand_str = str(random.randint(0, 1000000))
-
-            with open(filename, "w") as f:
-                f.write(rand_str)
-            time.sleep(0.001)
-            try:
-                with open(filename, "r") as f:
-                    if f.read() == rand_str:
-                        break
-            except FileNotFoundError:
-                pass
-
-        # Create a payload dict which is a clone of kwargs but all np.array values are
-        # converted to strings
-        payload = {}
-        for k, v in kwargs.items():
-            if isinstance(v, np.ndarray):
-                payload[k] = image_to_str(v, quality=kwargs.get("quality", 90))
+    start_time = time.time()
+    while True:
+        try:
+            resp = requests.post(url, headers=headers, json=payload, timeout=request_timeout)
+            if resp.status_code == 200:
+                result = resp.json()
+                break
             else:
-                payload[k] = v
-        # Set the headers
-        headers = {"Content-Type": "application/json"}
-
-        start_time = time.time()
-        while True:
-            try:
-                resp = requests.post(url, headers=headers, json=payload, timeout=1)
-                if resp.status_code == 200:
-                    result = resp.json()
-                    break
-                else:
-                    raise Exception("Request failed")
-            except (
-                requests.exceptions.Timeout,
-                requests.exceptions.RequestException,
-            ) as e:
-                print(e)
-                if time.time() - start_time > 20:
-                    raise Exception("Request timed out after 20 seconds")
-
-        try:
-            # Delete the lock file
-            os.remove(filename)
-        except FileNotFoundError:
-            pass
-
-    except Exception as e:
-        try:
-            # Delete the lock file
-            os.remove(filename)
-        except FileNotFoundError:
-            pass
-        raise e
+                raise Exception("Request failed")
+        except (
+            requests.exceptions.Timeout,
+            requests.exceptions.RequestException,
+        ) as e:
+            print(e)
+            if time.time() - start_time > 20:
+                raise Exception("Request timed out after 20 seconds")
 
     return result

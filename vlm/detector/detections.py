@@ -23,6 +23,7 @@ class ObjectDetections:
         phrases: List[str],
         image_source: Optional[np.ndarray],
         fmt: str = "cxcywh",
+        masks: Optional[List[Optional[np.ndarray]]] = None,
     ):
         self.image_source = image_source
         if fmt != "xyxy":
@@ -31,6 +32,10 @@ class ObjectDetections:
             self.boxes = boxes
         self.logits = logits
         self.phrases = phrases
+        if masks is None:
+            self.masks = [None] * len(self.phrases)
+        else:
+            self.masks = masks
         self._annotated_frame: Optional[np.ndarray] = None
 
     @property
@@ -88,6 +93,7 @@ class ObjectDetections:
         self.boxes = self.boxes[keep]
         self.logits = self.logits[keep]
         self.phrases = [p for i, p in enumerate(self.phrases) if keep[i]]
+        self.masks = [m for i, m in enumerate(self.masks) if keep[i]]
         self._annotated_frame = None
 
     def to_json(self) -> dict:
@@ -119,10 +125,11 @@ class ObjectDetections:
         """
         return cls(
             image_source=image_source,
-            boxes=torch.tensor(json_dict["boxes"]),
-            logits=torch.tensor(json_dict["logits"]),
+            boxes=torch.tensor(json_dict["boxes"], dtype=torch.float32).reshape(-1, 4),
+            logits=torch.tensor(json_dict["logits"], dtype=torch.float32),
             phrases=json_dict["phrases"],
             fmt="xyxy",
+            masks=json_dict.get("masks"),
         )
 
 

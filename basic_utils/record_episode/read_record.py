@@ -15,8 +15,10 @@ def read_record(continue_path, flag_once=False):
         flag_once (bool): If True, return empty metrics (single run mode)
         
     Returns:
-        tuple: (num_total, num_success, spl_all, soft_spl_all, 
-                distance_to_goal_all, distance_to_goal_reward_all, last_time)
+        tuple: (num_total, num_success, spl_all, soft_spl_all,
+                distance_to_goal_all, distance_to_goal_reward_all, last_time,
+                clip_client_total_ms, clip_server_total_ms,
+                clip_model_total_ms, yoloe_total_ms)
                 
     Metrics returned:
         - num_total: Total number of episodes completed
@@ -26,6 +28,10 @@ def read_record(continue_path, flag_once=False):
         - distance_to_goal_all: Cumulative distance to goal
         - distance_to_goal_reward_all: Cumulative distance-based rewards
         - last_time: Time spent on last episode
+        - clip_client_total_ms: Cumulative CLIP client time in milliseconds
+        - clip_server_total_ms: Cumulative CLIP server time in milliseconds
+        - clip_model_total_ms: Cumulative CLIP model time in milliseconds
+        - yoloe_total_ms: Cumulative YOLOE inference time in milliseconds
     """
     # Initialize variables to store the metrics
     num_total = 0
@@ -35,6 +41,10 @@ def read_record(continue_path, flag_once=False):
     distance_to_goal_all = 0.0
     distance_to_goal_reward_all = 0.0
     last_time = 0.0
+    clip_client_total_ms = 0.0
+    clip_server_total_ms = 0.0
+    clip_model_total_ms = 0.0
+    yoloe_total_ms = 0.0
 
     # Return directly for single run
     if flag_once:
@@ -46,6 +56,10 @@ def read_record(continue_path, flag_once=False):
             distance_to_goal_all,
             distance_to_goal_reward_all,
             last_time,
+            clip_client_total_ms,
+            clip_server_total_ms,
+            clip_model_total_ms,
+            yoloe_total_ms,
         )
     # Confirm file exists
     if os.path.exists(continue_path):
@@ -82,6 +96,29 @@ def read_record(continue_path, flag_once=False):
                     r"(\d+\.\d+) seconds spend in this task", latest_record
                 ).group(1)
             )
+            clip_client_total_ms_match = re.search(
+                r"CLIP Client Total ms:\s+([\d\.]+)", latest_record
+            )
+            if clip_client_total_ms_match:
+                clip_client_total_ms = float(clip_client_total_ms_match.group(1))
+
+            clip_server_total_ms_match = re.search(
+                r"CLIP Server Total ms:\s+([\d\.]+)", latest_record
+            )
+            if clip_server_total_ms_match:
+                clip_server_total_ms = float(clip_server_total_ms_match.group(1))
+
+            clip_model_total_ms_match = re.search(
+                r"CLIP Model Total ms:\s+([\d\.]+)", latest_record
+            )
+            if clip_model_total_ms_match:
+                clip_model_total_ms = float(clip_model_total_ms_match.group(1))
+
+            yoloe_total_ms_match = re.search(
+                r"YOLOE Total ms:\s+([\d\.]+)", latest_record
+            )
+            if yoloe_total_ms_match:
+                yoloe_total_ms = float(yoloe_total_ms_match.group(1))
 
         print("Successfully read the previous set of metrics")
 
@@ -93,4 +130,8 @@ def read_record(continue_path, flag_once=False):
         distance_to_goal_all,
         distance_to_goal_reward_all,
         last_time,
+        clip_client_total_ms,
+        clip_server_total_ms,
+        clip_model_total_ms,
+        yoloe_total_ms,
     )

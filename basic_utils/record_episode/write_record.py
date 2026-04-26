@@ -2,7 +2,18 @@ import os
 
 
 def write_record(
-    scene_id, episode_id, table, result_text, label, num_total, time_spend, file_path
+    scene_id,
+    episode_id,
+    table,
+    result_text,
+    label,
+    num_total,
+    time_spend,
+    file_path,
+    clip_client_total_ms=0.0,
+    clip_server_total_ms=0.0,
+    clip_model_total_ms=0.0,
+    yoloe_total_ms=0.0,
 ):
     """
     Write navigation episode results to record file
@@ -20,6 +31,10 @@ def write_record(
         num_total: Total episode number completed
         time_spend: Time spent on this episode (seconds)
         file_path: Path to the record file to write to
+        clip_client_total_ms: Cumulative CLIP client time in milliseconds
+        clip_server_total_ms: Cumulative CLIP server time in milliseconds
+        clip_model_total_ms: Cumulative CLIP model time in milliseconds
+        yoloe_total_ms: Cumulative YOLOE inference time in milliseconds
     """
     new_info = f"""
     Scene ID: {scene_id}
@@ -29,6 +44,10 @@ def write_record(
     target to find is {label}
     No.{num_total} task is finished
     {time_spend:.2f} seconds spend in this task
+    CLIP Client Total ms: {clip_client_total_ms:.4f}
+    CLIP Server Total ms: {clip_server_total_ms:.4f}
+    CLIP Model Total ms: {clip_model_total_ms:.4f}
+    YOLOE Total ms: {yoloe_total_ms:.4f}
     """
     new_info = remove_all_indents(new_info)
 

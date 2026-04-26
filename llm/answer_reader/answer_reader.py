@@ -15,7 +15,16 @@ def read_answer(llm_answer_path, llm_response_path, label, llm_client):
                 break
 
         if not label_existing:
-            llm_answer, response = get_answer(prompt=label, client=llm_client)
+            try:
+                llm_answer, response = get_answer(prompt=label, client=llm_client)
+            except Exception as exc:
+                print(f"LLM lookup failed for {label}: {exc}")
+                llm_answer = None
+                response = f"LLM lookup failed: {exc}"
+
+            if not llm_answer:
+                raise ValueError(f"No LLM answer available for {label}")
+
             print(llm_answer)
             f.write(f"\n{label}: {llm_answer}")
             print(f"New Answer for {label}: {llm_answer}")
