@@ -1,1 +1,1 @@
-from habitat2ros import habitat_publisher
+from . import habitat_publisher

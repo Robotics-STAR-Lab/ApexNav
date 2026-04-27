@@ -4,7 +4,7 @@ may cause misdetection, potential room objects, and the confidence threshold.
 
 At each step, I will give you a label.You should consider the following:
 
-(1) For misdetection, provide objects that may be misdetected by detectors such as YOLO and GroundingDINO, considering similarities in shape, color, size, etc. 
+(1) For misdetection, provide objects that may be misdetected by detectors such as YOLOE, considering similarities in shape, color, size, etc. 
 
 The labels should be in COCO classes, with at least 3 and at most 5 labels.
 

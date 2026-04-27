@@ -99,7 +99,7 @@ void MapROS::init()
   // Setup subscribers for object detection and ITM scores
   detected_object_cloud_sub_ = node_.subscribe(
       "/detector/clouds_with_scores", 10, &MapROS::detectedObjectCloudCallback, this);
-  itm_score_sub_ = node_.subscribe("/blip2/cosine_score", 10, &MapROS::itmScoreCallback, this);
+  itm_score_sub_ = node_.subscribe("/clip/cosine_score", 10, &MapROS::itmScoreCallback, this);
 
   // Setup synchronized subscribers for depth image and pose data
   depth_sub_.reset(

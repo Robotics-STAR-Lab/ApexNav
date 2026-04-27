@@ -22,11 +22,10 @@ Author: Zager-Zhang
 
 # Standard library imports
 import argparse
-import gzip
-import json
 import os
 import signal
 from copy import deepcopy
+from pathlib import Path
 
 # Third-party library imports
 from hydra import initialize, compose
@@ -60,7 +59,8 @@ from llm.answer_reader.answer_reader import read_answer
 from basic_utils.object_point_cloud_utils.object_point_cloud import (
     get_object_point_cloud,
 )
-from vlm.Labels import MP3D_ID_TO_NAME
+from vlm.label_utils import normalize_objectnav_label
+from basic_utils.path_utils import WORKSPACE_ROOT
 
 
 FORWARD_KEY = "w"
@@ -123,19 +123,36 @@ def _parse_dataset_arg():
     return args.dataset, unknown
 
 
+def _absolutize_habitat_paths(cfg: DictConfig) -> None:
+    def _to_workspace_path(path_value):
+        if not isinstance(path_value, str) or path_value == "":
+            return path_value
+        path = Path(path_value).expanduser()
+        if path.is_absolute():
+            return str(path)
+        return str((WORKSPACE_ROOT / path).resolve(strict=False))
+
+    with habitat.config.read_write(cfg):
+        if "data_path" in cfg.habitat.dataset:
+            cfg.habitat.dataset.data_path = _to_workspace_path(
+                cfg.habitat.dataset.data_path
+            )
+        for key in ("scenes_dir", "scene_dataset"):
+            if key in cfg.habitat.dataset:
+                cfg.habitat.dataset[key] = _to_workspace_path(cfg.habitat.dataset[key])
+            if key in cfg.habitat.simulator:
+                cfg.habitat.simulator[key] = _to_workspace_path(
+                    cfg.habitat.simulator[key]
+                )
+        if "scene" in cfg.habitat.simulator:
+            cfg.habitat.simulator.scene = _to_workspace_path(
+                cfg.habitat.simulator.scene
+            )
+
+
 def main(cfg: DictConfig) -> None:
     global msg_observations, fusion_threshold
     global ros_pub, confidence_threshold_pub
-
-    with gzip.open(
-        "data/datasets/objectnav/mp3d/v1/val/val.json.gz", "rt", encoding="utf-8"
-    ) as f:
-        val_data = json.load(f)
-    category_to_coco = val_data.get("category_to_mp3d_category_id", {})
-    id_to_name = {
-        category_to_coco[cat]: MP3D_ID_TO_NAME[idx]
-        for idx, cat in enumerate(category_to_coco)
-    }
 
     score_list = []
     object_masks_list = []
@@ -143,6 +160,7 @@ def main(cfg: DictConfig) -> None:
     llm_answer = []
 
     cfg = patch_config(cfg)
+    _absolutize_habitat_paths(cfg)
     env_count = 0 if cfg.test_epi_num == -1 else cfg.test_epi_num
     detector_cfg = cfg.detector
     llm_cfg = cfg.llm
@@ -174,7 +192,7 @@ def main(cfg: DictConfig) -> None:
                 ),
                 "collisions": CollisionsMeasurementConfig(),
             }
-        )
+    )
     
     # Initialize Habitat environment
     env = habitat.Env(cfg)
@@ -199,7 +217,7 @@ def main(cfg: DictConfig) -> None:
     # Initialize ROS publishers and timer for periodic observation publishing
     ros_pub = habitat_publisher.ROSPublisher()
     timer = rospy.Timer(rospy.Duration(0.1), publish_observations)
-    itm_score_pub = rospy.Publisher("/blip2/cosine_score", Float64, queue_size=10)
+    itm_score_pub = rospy.Publisher("/clip/cosine_score", Float64, queue_size=10)
     cld_with_score_pub = rospy.Publisher(
         "/detector/clouds_with_scores", MultipleMasksWithConfidence, queue_size=10
     )
@@ -212,9 +230,7 @@ def main(cfg: DictConfig) -> None:
 
     label = env.current_episode.object_category
 
-    if label in category_to_coco:
-        coco_id = category_to_coco[label]
-        label = id_to_name.get(coco_id, label)
+    label = normalize_objectnav_label(label, cfg.habitat.dataset.data_path)
 
     llm_answer, room, fusion_threshold = read_answer(
         llm_answer_path, llm_response_path, label, llm_client

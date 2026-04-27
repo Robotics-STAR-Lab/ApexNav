@@ -12,7 +12,7 @@ habitat:
     split: val
     data_path: data/datasets/objectnav/hm3d/v1/{split}/{split}.json.gz # HM3D-v1 dataset
   environment:
-    max_episode_steps: 500
+    max_episode_steps: 1000
     iterator_options:
       cycle: false
       shuffle: false
@@ -40,14 +40,11 @@ habitat:
             normalize_depth: true
 
 detector:
-  yolo:
-    confidence_threshold_yolo: 0.3
-    iou_threshold_yolo: 0.5
+  yoloe:
+    weights: data/yoloe-11l-seg.pt
+    confidence_threshold: 0.3
+    iou_threshold: 0.5
     agnostic_nms: True
-
-  groundingDINO:
-    confidence_threshold_dino: 0.40
-    text_threshold: 0.25
 
 llm:
   llm_answer_path: llm/answers/llm_answer_hm3d.txt

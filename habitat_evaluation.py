@@ -25,12 +25,11 @@ Author: Zager-Zhang
 
 # Standard library imports
 import argparse
-import gzip
-import json
 import os
 import signal
 import time
 from copy import deepcopy
+from pathlib import Path
 
 # Third-party library imports
 from hydra import initialize, compose
@@ -72,7 +71,8 @@ from basic_utils.record_episode.write_record import write_record
 from habitat2ros import habitat_publisher
 from llm.answer_reader.answer_reader import read_answer
 from params import HABITAT_STATE, ROS_STATE, ACTION, RESULT_TYPES
-from vlm.Labels import MP3D_ID_TO_NAME
+from vlm.label_utils import normalize_objectnav_label
+from basic_utils.path_utils import WORKSPACE_ROOT
 from vlm.utils.get_itm_message import get_itm_message_cosine
 from vlm.utils.get_object_utils import get_object
 
@@ -99,6 +99,19 @@ def publish_float32_array(publisher, data_list):
     msg = Float32MultiArray()
     msg.data = data_list
     publisher.publish(msg)
+
+
+def average_ms(total_ms, count):
+    if count <= 0:
+        return 0.0
+    return total_ms / count
+
+
+def format_latency_and_hz(total_ms, count):
+    avg_ms = average_ms(total_ms, count)
+    if avg_ms <= 0:
+        return "N/A"
+    return f"{avg_ms:.2f} ms ({1000.0 / avg_ms:.2f} Hz)"
 
 
 def signal_handler(sig, frame):
@@ -161,21 +174,37 @@ def _parse_dataset_arg():
     return args.dataset, unknown
 
 
+def _absolutize_habitat_paths(cfg: DictConfig) -> None:
+    def _to_workspace_path(path_value):
+        if not isinstance(path_value, str) or path_value == "":
+            return path_value
+        path = Path(path_value).expanduser()
+        if path.is_absolute():
+            return str(path)
+        return str((WORKSPACE_ROOT / path).resolve(strict=False))
+
+    with habitat.config.read_write(cfg):
+        if "data_path" in cfg.habitat.dataset:
+            cfg.habitat.dataset.data_path = _to_workspace_path(
+                cfg.habitat.dataset.data_path
+            )
+        for key in ("scenes_dir", "scene_dataset"):
+            if key in cfg.habitat.dataset:
+                cfg.habitat.dataset[key] = _to_workspace_path(cfg.habitat.dataset[key])
+            if key in cfg.habitat.simulator:
+                cfg.habitat.simulator[key] = _to_workspace_path(
+                    cfg.habitat.simulator[key]
+                )
+        if "scene" in cfg.habitat.simulator:
+            cfg.habitat.simulator.scene = _to_workspace_path(
+                cfg.habitat.simulator.scene
+            )
+
+
 def main(cfg: DictConfig) -> None:
     global msg_observations, global_action, ros_state, fusion_threshold
     global ros_pub, trigger_pub, obj_point_cloud_pub, confidence_threshold_pub
     global final_state, expl_result
-
-    # Load MP3D validation data for object category mapping
-    with gzip.open(
-        "data/datasets/objectnav/mp3d/v1/val/val.json.gz", "rt", encoding="utf-8"
-    ) as f:
-        val_data = json.load(f)
-    category_to_coco = val_data.get("category_to_mp3d_category_id", {})
-    id_to_name = {
-        category_to_coco[cat]: MP3D_ID_TO_NAME[idx]
-        for idx, cat in enumerate(category_to_coco)
-    }
 
     start_time = time.time()
 
@@ -184,7 +213,7 @@ def main(cfg: DictConfig) -> None:
     result_list = [0] * len(RESULT_TYPES)
 
     cfg = patch_config(cfg)
-
+    _absolutize_habitat_paths(cfg)
     # Extract configuration parameters
     video_output_path = cfg.video_output_path.format(split=cfg.habitat.dataset.split)
     need_video = cfg.need_video
@@ -244,6 +273,10 @@ def main(cfg: DictConfig) -> None:
         distance_to_goal_all,
         distance_to_goal_reward_all,
         last_time,
+        clip_client_total_ms,
+        clip_server_total_ms,
+        clip_model_total_ms,
+        yoloe_total_ms,
     ) = read_record(continue_path, flag_once)
 
     if num_total >= number_of_episodes:
@@ -268,7 +301,7 @@ def main(cfg: DictConfig) -> None:
     rospy.Subscriber("/ros/expl_result", Int32, ros_expl_result_callback, queue_size=10)
     state_pub = rospy.Publisher("/habitat/state", Int32, queue_size=10)
     trigger_pub = rospy.Publisher("/move_base_simple/goal", PoseStamped, queue_size=10)
-    itm_score_pub = rospy.Publisher("/blip2/cosine_score", Float64, queue_size=10)
+    itm_score_pub = rospy.Publisher("/clip/cosine_score", Float64, queue_size=10)
     confidence_threshold_pub = rospy.Publisher(
         "/detector/confidence_threshold", Float64, queue_size=10
     )
@@ -293,6 +326,12 @@ def main(cfg: DictConfig) -> None:
         global_action = None
         cld_with_score_msg = MultipleMasksWithConfidence()
         count_steps = 0
+        episode_clip_calls = 0
+        episode_clip_client_total_ms = 0.0
+        episode_clip_server_total_ms = 0.0
+        episode_clip_model_total_ms = 0.0
+        episode_yoloe_calls = 0
+        episode_yoloe_total_ms = 0.0
 
         camera_pitch = 0.0
         observations = env.reset()
@@ -301,10 +340,7 @@ def main(cfg: DictConfig) -> None:
         del observations["camera_pitch"]
         label = env.current_episode.object_category
 
-        # Convert object category to coco name format
-        if label in category_to_coco:
-            coco_id = category_to_coco[label]
-            label = id_to_name.get(coco_id, label)
+        label = normalize_objectnav_label(label, cfg.habitat.dataset.data_path)
 
         # Get LLM answer and fusion threshold for the target object
         llm_answer, room, fusion_threshold = read_answer(
@@ -388,16 +424,46 @@ def main(cfg: DictConfig) -> None:
             observations = env.step(action)
 
             # Calculate ITM cosine similarity score
-            cosine = get_itm_message_cosine(observations["rgb"], label, room)
+            cosine, clip_timing = get_itm_message_cosine(
+                observations["rgb"], label, room, return_stats=True
+            )
+            clip_client_ms = float(clip_timing.get("client_total_ms", 0.0) or 0.0)
+            clip_server_ms = float(clip_timing.get("server_total_ms", 0.0) or 0.0)
+            clip_model_ms = float(
+                clip_timing.get("model_inference_ms", 0.0) or 0.0
+            )
+
+            episode_clip_calls += 1
+            clip_client_total_ms += clip_client_ms
+            episode_clip_client_total_ms += clip_client_ms
+
+            if clip_server_ms > 0.0 or clip_model_ms > 0.0:
+                clip_server_total_ms += clip_server_ms
+                episode_clip_server_total_ms += clip_server_ms
+                clip_model_total_ms += clip_model_ms
+                episode_clip_model_total_ms += clip_model_ms
+
             print(f"Target related room: {room}")
             print(f"ITM cosine similarity: {cosine:.3f}")
+            print(f"CLIP latency: {format_latency_and_hz(clip_client_ms, 1)}")
 
             publish_float64(itm_score_pub, cosine)
 
             # Detect objects in the current observation
-            observations["rgb"], score_list, object_masks_list, label_list = get_object(
-                label, observations["rgb"], detector_cfg, llm_answer
+            (
+                observations["rgb"],
+                score_list,
+                object_masks_list,
+                label_list,
+                yoloe_stats,
+            ) = get_object(
+                label, observations["rgb"], detector_cfg, llm_answer, return_stats=True
             )
+            yoloe_latency_ms = float(yoloe_stats.get("yoloe_latency_ms", 0.0) or 0.0)
+            episode_yoloe_calls += 1
+            yoloe_total_ms += yoloe_latency_ms
+            episode_yoloe_total_ms += yoloe_latency_ms
+            print(f"YOLOE inference: {format_latency_and_hz(yoloe_latency_ms, 1)}")
 
             # Publish habitat observations to ROS
             observations["camera_pitch"] = camera_pitch
@@ -488,6 +554,13 @@ def main(cfg: DictConfig) -> None:
             )
         vis_frames.clear()
 
+        if episode_clip_calls > 0:
+            print(
+                "Episode VLM average: "
+                f"CLIP {format_latency_and_hz(episode_clip_client_total_ms, episode_clip_calls)} | "
+                f"YOLOE {format_latency_and_hz(episode_yoloe_total_ms, episode_yoloe_calls)}"
+            )
+
         # Display average performance metrics
         table1 = PrettyTable(["Metric", "Average"])
         table1.add_row(["Average Success", f"{num_success/num_total * 100:.2f}%"])
@@ -506,6 +579,10 @@ def main(cfg: DictConfig) -> None:
         table2.add_row(["Total SPL", f"{spl_all:.2f}"])
         table2.add_row(["Total Soft SPL", f"{soft_spl_all:.2f}"])
         table2.add_row(["Total Distance to Goal", f"{distance_to_goal_all:.4f}"])
+        table2.add_row(["Total CLIP Client ms", f"{clip_client_total_ms:.4f}"])
+        table2.add_row(["Total CLIP Server ms", f"{clip_server_total_ms:.4f}"])
+        table2.add_row(["Total CLIP Model ms", f"{clip_model_total_ms:.4f}"])
+        table2.add_row(["Total YOLOE ms", f"{yoloe_total_ms:.4f}"])
 
         if flag_once:
             break
@@ -520,6 +597,10 @@ def main(cfg: DictConfig) -> None:
             num_total,
             time_spend,
             record_file_path,
+            clip_client_total_ms=clip_client_total_ms,
+            clip_server_total_ms=clip_server_total_ms,
+            clip_model_total_ms=clip_model_total_ms,
+            yoloe_total_ms=yoloe_total_ms,
         )
 
         # Write results to continue file
@@ -532,6 +613,10 @@ def main(cfg: DictConfig) -> None:
             num_total,
             time_spend,
             continue_path,
+            clip_client_total_ms=clip_client_total_ms,
+            clip_server_total_ms=clip_server_total_ms,
+            clip_model_total_ms=clip_model_total_ms,
+            yoloe_total_ms=yoloe_total_ms,
         )
 
         # Count files in each result category folder

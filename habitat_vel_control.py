@@ -1,8 +1,7 @@
 import os
 import signal
-import gzip
-import json
 import time
+from pathlib import Path
 
 import habitat
 import numpy as np
@@ -14,7 +13,8 @@ from habitat2ros import habitat_publisher
 import rospy
 from copy import deepcopy
 from std_msgs.msg import Float64, String
-from vlm.Labels import MP3D_ID_TO_NAME
+from vlm.label_utils import normalize_objectnav_label
+from basic_utils.path_utils import WORKSPACE_ROOT
 from geometry_msgs.msg import Twist
 import habitat_sim
 from habitat_sim.utils import common as utils
@@ -53,6 +53,33 @@ def cmd_vel_callback(msg):
     cmd_omega = msg.angular.z
 
 
+def _absolutize_habitat_paths(cfg: DictConfig) -> None:
+    def _to_workspace_path(path_value):
+        if not isinstance(path_value, str) or path_value == "":
+            return path_value
+        path = Path(path_value).expanduser()
+        if path.is_absolute():
+            return str(path)
+        return str((WORKSPACE_ROOT / path).resolve(strict=False))
+
+    with habitat.config.read_write(cfg):
+        if "data_path" in cfg.habitat.dataset:
+            cfg.habitat.dataset.data_path = _to_workspace_path(
+                cfg.habitat.dataset.data_path
+            )
+        for key in ("scenes_dir", "scene_dataset"):
+            if key in cfg.habitat.dataset:
+                cfg.habitat.dataset[key] = _to_workspace_path(cfg.habitat.dataset[key])
+            if key in cfg.habitat.simulator:
+                cfg.habitat.simulator[key] = _to_workspace_path(
+                    cfg.habitat.simulator[key]
+                )
+        if "scene" in cfg.habitat.simulator:
+            cfg.habitat.simulator.scene = _to_workspace_path(
+                cfg.habitat.simulator.scene
+            )
+
+
 @hydra.main(
     version_base=None,
     config_path="config",
@@ -68,18 +95,8 @@ def main(cfg: DictConfig) -> None:
     cmd_vel = 0.0
     cmd_omega = 0.0
 
-    with gzip.open(
-        "data/datasets/objectnav/mp3d/v1/val/val.json.gz", "rt", encoding="utf-8"
-    ) as f:
-        val_data = json.load(f)
-    category_to_coco = val_data.get("category_to_mp3d_category_id", {})
-    id_to_name = {
-        category_to_coco[cat]: MP3D_ID_TO_NAME[idx]
-        for idx, cat in enumerate(category_to_coco)
-    }
-
-
     cfg = patch_config(cfg)
+    _absolutize_habitat_paths(cfg)
     env_count = cfg.test_epi_num
     print(env_count)
     cfg_rgb_sensor = cfg.habitat.simulator.agents.main_agent.sim_sensors.rgb_sensor
@@ -147,7 +164,7 @@ def main(cfg: DictConfig) -> None:
     ros_pub = habitat_publisher.ROSPublisher()
     cmd_sub = rospy.Subscriber("/cmd_vel", Twist, cmd_vel_callback, queue_size=10)
     timer = rospy.Timer(rospy.Duration(0.1), publish_observations)
-    itm_score_pub = rospy.Publisher("/blip2/cosine_score", Float64, queue_size=10)
+    itm_score_pub = rospy.Publisher("/clip/cosine_score", Float64, queue_size=10)
     # clouds-with-scores publisher removed (not used in this script)
     confidence_threshold_pub = rospy.Publisher(
         "/detector/confidence_threshold", Float64, queue_size=10
@@ -159,9 +176,7 @@ def main(cfg: DictConfig) -> None:
 
     label = env.current_episode.object_category
 
-    if label in category_to_coco:
-        coco_id = category_to_coco[label]
-        label = id_to_name.get(coco_id, label)
+    label = normalize_objectnav_label(label, cfg.habitat.dataset.data_path)
 
     # Publish the selected label so external nodes (e.g. real-world node) can receive it
     try:

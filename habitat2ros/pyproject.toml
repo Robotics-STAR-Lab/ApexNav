@@ -8,3 +8,9 @@ version = "0.1.0"
 authors = [
     {name = "Zager-Zhang"},
 ]
+
+[tool.setuptools]
+packages = ["habitat2ros"]
+
+[tool.setuptools.package-dir]
+habitat2ros = "."

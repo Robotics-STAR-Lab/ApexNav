@@ -19,10 +19,8 @@ catkin_make -DPYTHON_EXECUTABLE=/usr/bin/python3
 ### Run VLM servers
 Run each of the following commands in a separate terminal:
 ```bash
-python -m vlm.detector.grounding_dino --port 12181
-python -m vlm.itm.blip2itm --port 12182
-python -m vlm.segmentor.sam --port 12183
-python -m vlm.detector.yolov7 --port 12184
+python -m vlm.itm.clipitm --port 12182
+python -m vlm.detector.yoloe --port 12184
 ```
 
 ### Launch visualization and main algorithm

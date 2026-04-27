@@ -1,74 +1,20 @@
-<div align="center">
-    <img src="assets/apexnav_logo_white.png" alt="ApexNav Logo" width="200">
-    <h2>An Adaptive Exploration Strategy for Zero-Shot Object Navigation with Target-centric Semantic Fusion</h2>
-    <strong>
-      <em>IEEE Robotics and Automation Letters</em>
-    </strong>
-    <br>
-        <a href="https://zager-zhang.github.io" target="_blank">Mingjie Zhang</a><sup>1, 2</sup>,
-        Yuheng Du<sup>1</sup>,
-        <a href="https://chengkaiwu.me" target="_blank">Chengkai Wu</a><sup>1</sup>,
-        Jinni Zhou<sup>1</sup>,
-        Zhenchao Qi<sup>1</sup>,
-        <a href="https://personal.hkust-gz.edu.cn/junma/people-page.html" target="_blank">Jun Ma</a><sup>1</sup>,
-        <a href="https://robotics-star.com/people" target="_blank">Boyu Zhou</a><sup>2,†</sup>
-        <p>
-        <h45>
-            <sup>1</sup> The Hong Kong University of Science and Technology (Guangzhou). &nbsp;&nbsp;
-            <br>
-            <sup>2</sup> Southern University of Science and Technology. &nbsp;&nbsp;
-            <br>
-        </h45>
-        <sup>†</sup>Corresponding Authors
-    </p>
-    <a href="https://ieeexplore.ieee.org/document/11150727"><img alt="Paper" src="https://img.shields.io/badge/Paper-IEEE-blue"/></a>
-    <a href="https://arxiv.org/abs/2504.14478"><img alt="Paper" src="https://img.shields.io/badge/Paper-arXiv-red"/></a>
-    <a href='https://robotics-star.com/ApexNav'><img src='https://img.shields.io/badge/Project_Page-ApexNav-green' alt='Project Page'></a>
+# Tiny-ON: Tiny Object Navigation
 
-<br>
-<br>
+> Built on ApexNav.
 
-<p align="center" style="font-size: 1.0em;">
-  <a href="">
-    <img src="assets/video_plant.gif" alt="apexnav_demo" width="80%">
-  </a>
-  <br>
-  <em>
-    ApexNav ensures highly <strong>reliable</strong> object navigation by leveraging <strong>Target-centric Semantic Fusion</strong>, and boosts <strong>efficiency</strong> with its <strong>Adaptive Exploration Strategy</strong>.
-  </em>
-</p>
-
-</div>
-
-## 📢 News
-- **[10/02/2026]**: ROS2 Jazzy support is now available! Thanks to [romaster93](https://github.com/romaster93) for contributing the ROS2 interface. Check out the [ros2-jazzy](https://github.com/Robotics-STAR-Lab/ApexNav/tree/ros2-jazzy) branch.
-- **[10/12/2025]**: ApexNav released real world test example code. Check out the [Real World README](./real_world_test_example/README.md) for more details.
-- **[07/09/2025]**: ApexNav has been published in the Early Access area on [IEEE Xplore](https://ieeexplore.ieee.org/document/11150727).
-- **[22/08/2025]**: Release the main algorithm of ApexNav.
-- **[18/08/2025]**: ApexNav is conditionally accepted to RA-L 2025.
-
-## 📜 Introduction
-
-**[RA-L'25]** This repository maintains the implementation of "ApexNav: An Adaptive Exploration Strategy for Zero-Shot Object Navigation with Target-centric Semantic Fusion".
-
-The pipeline of ApexNav is detailed in the overview below.
-
-<p align="center" style="font-size: 1.0em;">
-  <a href="">
-    <img src="assets/pipeline.jpg" alt="pipeline" width="80%">
-  </a>
-</p>
-Please kindly star ⭐ this project if it helps you. Thanks for your support! 💖
+This repository is a lightweight ObjectNav variant based on ApexNav. The overall Habitat + ROS pipeline is kept, while the current VLM stack in this repo uses `YOLOE` for detection and `CLIPITM` for image-text matching.
 
 ## 🛠️ Installation
-> Tested on Ubuntu 20.04 with ROS Noetic and Python 3.9
 
-You need to install [ROS](https://www.ros.org/), and it is recommended to use [Anaconda](https://www.anaconda.com/) or [Miniconda](https://docs.conda.io/en/latest/miniconda.html) to manage your Python environment.
+> Tested on Ubuntu 20.04 with ROS Noetic and Python 3.10
+
+Please install [ROS](https://www.ros.org/) first. It is also recommended to use [Anaconda](https://www.anaconda.com/) or [Miniconda](https://docs.conda.io/en/latest/miniconda.html) to manage the Python environment.
 
 ### 1. Prerequisites
 
 #### 1.1 System Dependencies
-``` bash
+
+```bash
 sudo apt update
 sudo apt-get install libarmadillo-dev libompl-dev
 
@@ -86,81 +32,92 @@ cd ../..
 ```
 
 #### 1.2 LLM (Optional)
-> You can skip LLM configuration and directly use our pre-generated LLM output results in `llm/answers`.
 
-ollama 
-``` bash
+You can use Ollama locally:
+
+```bash
 curl -fsSL https://ollama.com/install.sh | sh
 ollama pull qwen3:8b
 ```
 
-#### 1.3 External Code Dependencies
-```bash
-git clone git@github.com:WongKinYiu/yolov7.git # yolov7
-git clone https://github.com/IDEA-Research/GroundingDINO.git # GroundingDINO
-```
+If you do not want to use an LLM, change `llm.llm_client.llm_client` to `none` in the config files under `config/`.
 
-#### 1.4 Model Weights Download
+#### 1.3 Model Weights Download
 
 Download the following model weights and place them in the `data/` directory:
-- `mobile_sam.pt`: https://github.com/ChaoningZhang/MobileSAM/tree/master/weights/mobile_sam.pt
-- `groundingdino_swint_ogc.pth`: 
-  ```bash
-  wget -O data/groundingdino_swint_ogc.pth https://github.com/IDEA-Research/GroundingDINO/releases/download/v0.1.0-alpha/groundingdino_swint_ogc.pth
-  ```
-- `yolov7-e6e.pt`: 
-  ```bash
-  wget -O data/yolov7-e6e.pt https://github.com/WongKinYiu/yolov7/releases/download/v0.1/yolov7-e6e.pt
-  ```
 
+```bash
+mkdir -p data
+```
+
+- `yoloe-11l-seg.pt`:
+
+```bash
+wget -O data/yoloe-11l-seg.pt https://github.com/ultralytics/assets/releases/download/v8.4.0/yoloe-11l-seg.pt
+```
 
 ### 2. Setup Python Environment
 
 #### 2.1 Clone Repository
-``` bash
-git clone git@github.com:Robotics-STAR-Lab/ApexNav.git
+
+```bash
+git clone -b Lite-Apexnav git@github.com:Robotics-STAR-Lab/ApexNav.git
 cd ApexNav
 ```
 
 #### 2.2 Create Conda Environment
-``` bash
-conda env create -f apexnav_environment.yaml -y
+
+```bash
+conda create -n apexnav python=3.10 -y
 conda activate apexnav
 ```
 
-#### 2.3 Pytorch
-``` bash
+#### 2.3 PyTorch
+
+```bash
 # You can use 'nvcc --version' to check your CUDA version.
 # CUDA 11.8
-pip install torch==2.5.0 torchvision==0.20.0 torchaudio==2.5.0 --index-url https://download.pytorch.org/whl/cu118
+pip install torch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1 --index-url https://download.pytorch.org/whl/cu118
 # CUDA 12.1
-pip install torch==2.5.0 torchvision==0.20.0 torchaudio==2.5.0 --index-url https://download.pytorch.org/whl/cu121
+pip install torch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1 --index-url https://download.pytorch.org/whl/cu121
 # CUDA 12.4
-pip install torch==2.5.0 torchvision==0.20.0 torchaudio==2.5.0 --index-url https://download.pytorch.org/whl/cu124
+pip install torch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1 --index-url https://download.pytorch.org/whl/cu124
 ```
 
 #### 2.4 Habitat Simulator
-> We recommend using habitat-lab v0.3.1
-``` bash
-# habitat-lab v0.3.1
-git clone https://github.com/facebookresearch/habitat-lab.git
-cd habitat-lab; git checkout tags/v0.3.1;
-pip install -e habitat-lab
 
-# habitat-baselines v0.3.1
-pip install -e habitat-baselines
+We recommend using `habitat-sim v0.3.1` and `habitat-lab v0.3.1`.
+
+```bash
+# habitat-sim v0.3.1
+git clone --branch stable https://github.com/facebookresearch/habitat-sim.git
+cd habitat-sim
+git checkout tags/v0.3.1
+pip install -r requirements.txt
+export CUDACXX=/usr/local/cuda/bin/nvcc
+export CUDA_HOME=/usr/local/cuda
+export PATH=/usr/local/cuda/bin:$PATH
+python setup.py install --bullet --with-cuda
+cd ..
 ```
 
-**Note:** Any numpy-related errors will not affect subsequent operations, as long as `numpy==1.23.5` and `numba==0.60.0` are correctly installed.
+```bash
+# habitat-lab / habitat-baselines v0.3.1
+git clone https://github.com/facebookresearch/habitat-lab.git
+cd habitat-lab
+git checkout tags/v0.3.1
+pip install -e habitat-lab
+pip install -e habitat-baselines
+cd ..
+```
 
-#### 2.5 Others
-``` bash
-pip install salesforce-lavis==1.0.2 # -i https://pypi.tuna.tsinghua.edu.cn/simple
-cd .. # Return to ApexNav directory
+**Note:** Numpy-related warnings or dependency-conflict messages during Habitat installation can usually be ignored. Installing this repository in the next step will pin the required versions, including `numpy==1.23.5` and `numba==0.60.0`.
+
+#### 2.5 Install This Repository
+
+```bash
 pip install -e .
 ```
-
-**Note:** Any numpy-related errors will not affect subsequent operations, as long as `numpy==1.23.5` and `numba==0.60.0` are correctly installed.
 
 ## 📥 Datasets Download
 > Official Reference: https://github.com/facebookresearch/habitat-lab/blob/main/DATASETS.md
@@ -202,7 +159,9 @@ wget -O data/datasets/objectnav/hm3d/v2.zip https://dl.fbaipublicfiles.com/habit
 unzip data/datasets/objectnav/hm3d/v2.zip -d data/datasets/objectnav/hm3d && mv data/datasets/objectnav/hm3d/objectnav_hm3d_v2 data/datasets/objectnav/hm3d/v2 && rm data/datasets/objectnav/hm3d/v2.zip
 
 # MP3D
+# Note: the upstream download URL uses "m3d", while the local dataset path is "mp3d".
 wget -O data/datasets/objectnav/mp3d/v1.zip https://dl.fbaipublicfiles.com/habitat/data/datasets/objectnav/m3d/v1/objectnav_mp3d_v1.zip
+mkdir -p data/datasets/objectnav/mp3d/v1
 unzip data/datasets/objectnav/mp3d/v1.zip -d data/datasets/objectnav/mp3d/v1 && rm data/datasets/objectnav/mp3d/v1.zip
 ```
 
@@ -238,101 +197,67 @@ data
 │       ├── 17DRP5sb8fy
 │       ├── 1LXtFkjw3qL
 │       ├── .....
-├── groundingdino_swint_ogc.pth
-├── mobile_sam.pt
-└── yolov7-e6e.pt
+└── yoloe-11l-seg.pt
 ```
 
 Note that `train` and `val_mini` are not required and you can choose to delete them.
 </details>
 
 ## 🚀 Usage
-> All following commands should be run in the `apexnav` conda environment
-### ROS Compilation
-``` bash
+
+> All commands below should be run in the `apexnav` conda environment.
+
+### 1. Build the ROS workspace
+
+```bash
 catkin_make -DPYTHON_EXECUTABLE=/usr/bin/python3
 ```
-### Run VLMs Servers
-Each command should be run in a separate terminal.
-``` bash
-python -m vlm.detector.grounding_dino --port 12181
-python -m vlm.itm.blip2itm --port 12182
-python -m vlm.segmentor.sam --port 12183
-python -m vlm.detector.yolov7 --port 12184
-```
-### Launch Visualization and Main Algorithm
+
+This uses the system Python expected by ROS Noetic. Keep the `apexnav` conda environment active for the Python VLM and Habitat commands below.
+
+### 2. Start VLM servers
+
+Run each command in a separate terminal:
+
 ```bash
-source ./devel/setup.bash && roslaunch exploration_manager rviz.launch # RViz visualization
-source ./devel/setup.bash && roslaunch exploration_manager exploration.launch # ApexNav main algorithm
+python -m vlm.itm.clipitm --port 12182
+python -m vlm.detector.yoloe --port 12184
 ```
 
-### 📊 Evaluate Datasets in Habitat
-You can evaluate on all episodes of a dataset.
+Wait until the YOLOE terminal prints `YOLOE warmup complete!` and `Hosting on port 12184...` before starting Habitat evaluation.
+
+### 3. Launch RViz and the main planner
+
 ```bash
-# Need to source the workspace
+source ./devel/setup.bash && roslaunch exploration_manager rviz.launch
+source ./devel/setup.bash && roslaunch exploration_manager exploration.launch
+```
+
+### 4. Evaluate datasets in Habitat
+
+```bash
 source ./devel/setup.bash
 
-# Choose one datasets to evaluate
 python habitat_evaluation.py --dataset hm3dv1
-python habitat_evaluation.py --dataset hm3dv2 # default
+python habitat_evaluation.py --dataset hm3dv2
 python habitat_evaluation.py --dataset mp3d
 
-# You can also evaluate on one specific episode.
-python habitat_evaluation.py --dataset hm3dv2 test_epi_num=10 # episode_id 10
-```
-If you want to generate evaluation videos for each episode (videos will be categorized by task results), you can use the following command:
-```bash
+# Evaluate one specific episode
+python habitat_evaluation.py --dataset hm3dv2 test_epi_num=10
+
+# Save evaluation videos
 python habitat_evaluation.py --dataset hm3dv2 need_video=true
 ```
 
-### 🎮 Keyboard Control in Habitat
-You can also choose to manually control the agent in the Habitat simulator:
+### 5. Manual control in Habitat
+
 ```bash
-# Need to source the workspace
 source ./devel/setup.bash
 
-python habitat_manual_control.py --dataset hm3dv1 # Default episode_id = 0
-python habitat_manual_control.py --dataset hm3dv1 test_epi_num=10 # episode_id = 10
-```
+python habitat_manual_control.py --dataset hm3dv1
+python habitat_manual_control.py --dataset hm3dv2
+python habitat_manual_control.py --dataset mp3d
 
-### 🤖 Real-world Deployment Example
-If you want to run the real-world test example inside the Habitat simulator, please refer to the [Real World README](./real_world_test_example/README.md) for more details.
-
-<p align="center" style="font-size: 1.0em;">
-  <a href="">
-    <img src="assets/auto_search.gif" alt="apexnav_demo2" width="80%">
-  </a>
-  <br>
-  <em>
-    Trajectory Planning and MPC Control in Real-world Deployment Example in Habitat Simulator.
-  </em>
-</p>
-
-## 📋 TODO List
-
-- [x] Release the main algorithm of ApexNav
-- [x] Complete Installation and Usage documentation
-- [x] Add datasets download documentation
-- [x] Release the code of real-world deployment
-- [x] Add ROS2 support
-
-
-## 📚 Acknowledgment
-
-We would like to acknowledge the contributions of the following projects:
-- **[VLFM](https://github.com/bdaiinstitute/vlfm)**: For the concept of Vision-Language Frontier Maps.
-- **[FUEL](https://github.com/HKUST-Aerial-Robotics/FUEL)**: For the TSP-based efficient frontier exploration framework.
-## ✒️ Citation
-
-```bibtex
-@ARTICLE{zhang2025apexnav,
-  author={Zhang, Mingjie and Du, Yuheng and Wu, Chengkai and Zhou, Jinni and Qi, Zhenchao and Ma, Jun and Zhou, Boyu},
-  journal={IEEE Robotics and Automation Letters}, 
-  title={ApexNAV: An Adaptive Exploration Strategy for Zero-Shot Object Navigation With Target-Centric Semantic Fusion}, 
-  year={2025},
-  volume={10},
-  number={11},
-  pages={11530-11537},
-  keywords={Semantics;Navigation;Training;Robustness;Detectors;Noise measurement;Geometry;Three-dimensional displays;Object recognition;Faces;Search and rescue robots;vision-based navigation;autonomous agents},
-  doi={10.1109/LRA.2025.3606388}}
+# Run one specific episode
+python habitat_manual_control.py --dataset hm3dv2 test_epi_num=10
 ```
