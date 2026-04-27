@@ -41,6 +41,8 @@
 </div>
 
 ## 📢 News
+
+- **[27/04/2026]**: A lightweight version is now available! Thanks to [TracyLucia](https://github.com/TracyLucia) for contributing the lightweight version. Check out the [Lite-Apexnav](https://github.com/Robotics-STAR-Lab/ApexNav/tree/Lite-Apexnav) branch.
 - **[10/02/2026]**: ROS2 Jazzy support is now available! Thanks to [romaster93](https://github.com/romaster93) for contributing the ROS2 interface. Check out the [ros2-jazzy](https://github.com/Robotics-STAR-Lab/ApexNav/tree/ros2-jazzy) branch.
 - **[10/12/2025]**: ApexNav released real world test example code. Check out the [Real World README](./real_world_test_example/README.md) for more details.
 - **[07/09/2025]**: ApexNav has been published in the Early Access area on [IEEE Xplore](https://ieeexplore.ieee.org/document/11150727).
@@ -315,6 +317,7 @@ If you want to run the real-world test example inside the Habitat simulator, ple
 - [x] Add datasets download documentation
 - [x] Release the code of real-world deployment
 - [x] Add ROS2 support
+- [x] Add the lightweight version of ApexNav
 
 
 ## 📚 Acknowledgment
