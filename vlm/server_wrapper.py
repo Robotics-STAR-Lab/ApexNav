@@ -101,10 +101,16 @@ def _send_request(url: str, **kwargs: Any) -> dict:
     # Set the headers
     headers = {"Content-Type": "application/json"}
 
-    start_time = time.time()
+    deadline = time.monotonic() + request_timeout
     while True:
+        remaining_timeout = deadline - time.monotonic()
+        if remaining_timeout <= 0:
+            raise Exception(f"Request timed out after {request_timeout} seconds")
+
         try:
-            resp = requests.post(url, headers=headers, json=payload, timeout=request_timeout)
+            resp = requests.post(
+                url, headers=headers, json=payload, timeout=remaining_timeout
+            )
             if resp.status_code == 200:
                 result = resp.json()
                 break
@@ -115,7 +121,8 @@ def _send_request(url: str, **kwargs: Any) -> dict:
             requests.exceptions.RequestException,
         ) as e:
             print(e)
-            if time.time() - start_time > 20:
-                raise Exception("Request timed out after 20 seconds")
+            if time.monotonic() >= deadline:
+                raise Exception(f"Request timed out after {request_timeout} seconds")
+            time.sleep(min(1.0, deadline - time.monotonic()))
 
     return result

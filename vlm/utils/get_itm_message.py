@@ -1,5 +1,3 @@
-import cv2
-import numpy as np
 from vlm.itm.clipitm import CLIPITMClient
 
 itmclient = CLIPITMClient(port=12182)
