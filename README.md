@@ -1,4 +1,9 @@
-# Tiny-ON: Tiny Object Navigation
+<div align="center">
+    <img src="assets/apexnav_logo_white.png" alt="ApexNav Logo" width="200">
+    <h2>An Adaptive Exploration Strategy for Zero-Shot Object Navigation with Target-centric Semantic Fusion</h2>
+    <strong>
+
+</div>
 
 > Built on ApexNav.
 
