@@ -24,7 +24,9 @@
     <a href="https://ieeexplore.ieee.org/document/11150727"><img alt="Paper" src="https://img.shields.io/badge/Paper-IEEE-blue"/></a>
     <a href="https://arxiv.org/abs/2504.14478"><img alt="Paper" src="https://img.shields.io/badge/Paper-arXiv-red"/></a>
     <a href='https://robotics-star.com/ApexNav'><img src='https://img.shields.io/badge/Project_Page-ApexNav-green' alt='Project Page'></a>
-
+    <a href="https://github.com/Robotics-STAR-Lab/ApexNav/tree/Lite-Apexnav">
+      <img alt="Lite Version" src="https://img.shields.io/badge/Code-Lightweight%20Version-orange"/>
+    </a>
 <br>
 <br>
 
@@ -42,7 +44,7 @@
 
 ## 📢 News
 
-- **[27/04/2026]**: A lightweight version is now available! Thanks to [TracyLucia](https://github.com/TracyLucia) for contributing the lightweight version. Check out the [Lite-Apexnav](https://github.com/Robotics-STAR-Lab/ApexNav/tree/Lite-Apexnav) branch.
+- **[27/04/2026]**: 🌟 A **lightweight version** is now available! Thanks to [TracyLucia](https://github.com/TracyLucia) for contributing the lightweight version. Check out the [Lite-Apexnav](https://github.com/Robotics-STAR-Lab/ApexNav/tree/Lite-Apexnav) branch.
 - **[10/02/2026]**: ROS2 Jazzy support is now available! Thanks to [romaster93](https://github.com/romaster93) for contributing the ROS2 interface. Check out the [ros2-jazzy](https://github.com/Robotics-STAR-Lab/ApexNav/tree/ros2-jazzy) branch.
 - **[10/12/2025]**: ApexNav released real world test example code. Check out the [Real World README](./real_world_test_example/README.md) for more details.
 - **[07/09/2025]**: ApexNav has been published in the Early Access area on [IEEE Xplore](https://ieeexplore.ieee.org/document/11150727).
