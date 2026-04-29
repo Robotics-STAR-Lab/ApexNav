@@ -2,7 +2,7 @@
     <img src="assets/apexnav_logo_white.png" alt="ApexNav Logo" width="200">
     <h2>An Adaptive Exploration Strategy for Zero-Shot Object Navigation with Target-centric Semantic Fusion</h2>
     <strong>
-      <em>IEEE Robotics and Automation Letters</em>
+      <em>IEEE Robotics and Automation Letters && IEEE ICRA 2026</em>
     </strong>
     <br>
         <a href="https://zager-zhang.github.io" target="_blank">Mingjie Zhang</a><sup>1, 2</sup>,
